@@ -69,6 +69,38 @@ export function extractManagedBlock(content: string): {
 }
 
 /**
+ * Replace managed block in /etc/hosts content with new content
+ * 
+ * Splices new block between content before and after the existing managed block.
+ * If no existing managed block is found, appends the new block with proper spacing.
+ * Preserves blank lines for readability.
+ * 
+ * @param original - Original /etc/hosts file content
+ * @param newBlock - New managed block content (including BEGIN/END markers)
+ * @returns Updated /etc/hosts content with replaced managed block
+ */
+export function replaceManagedBlock(original: string, newBlock: string): string {
+  const { before, after } = extractManagedBlock(original);
+  
+  // If no existing managed block (first-time insertion)
+  if (before === original && after === "") {
+    // If original is empty, just return the new block
+    if (original === "") {
+      return newBlock;
+    }
+    
+    // Append new block with blank line for readability
+    // Ensure there's a newline before adding blank line
+    const needsNewline = !original.endsWith("\n");
+    return original + (needsNewline ? "\n" : "") + "\n" + newBlock;
+  }
+  
+  // Replace existing managed block
+  // Preserve any blank lines that were before/after the old block
+  return before + newBlock + after;
+}
+
+/**
  * Write content to /etc/hosts atomically
  * 
  * Uses a temp file + rename strategy to ensure atomic writes.

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { readEtcHosts, extractManagedBlock, writeEtcHosts } from "../etchosts";
+import { readEtcHosts, extractManagedBlock, replaceManagedBlock, writeEtcHosts } from "../etchosts";
 import { existsSync } from "fs";
 
 describe("etchosts", () => {
@@ -119,6 +119,153 @@ describe("etchosts", () => {
     });
   });
 
+  describe("replaceManagedBlock", () => {
+    test("replaces existing managed block", () => {
+      const original = `127.0.0.1 localhost
+# BEGIN HOSTIE
+192.168.1.10 old.local
+# END HOSTIE
+::1 localhost`;
+      const newBlock = `# BEGIN HOSTIE
+192.168.1.20 new.local
+192.168.1.21 another.local
+# END HOSTIE`;
+
+      const result = replaceManagedBlock(original, newBlock);
+
+      expect(result).toBe(`127.0.0.1 localhost
+# BEGIN HOSTIE
+192.168.1.20 new.local
+192.168.1.21 another.local
+# END HOSTIE
+::1 localhost`);
+    });
+
+    test("preserves content outside markers", () => {
+      const original = `# System hosts
+127.0.0.1 localhost
+
+# BEGIN HOSTIE
+192.168.1.10 dev.local
+# END HOSTIE
+
+# IPv6
+::1 localhost`;
+      const newBlock = `# BEGIN HOSTIE
+192.168.1.30 prod.local
+# END HOSTIE`;
+
+      const result = replaceManagedBlock(original, newBlock);
+
+      expect(result).toBe(`# System hosts
+127.0.0.1 localhost
+
+# BEGIN HOSTIE
+192.168.1.30 prod.local
+# END HOSTIE
+
+# IPv6
+::1 localhost`);
+    });
+
+    test("handles first-time insertion (no existing markers)", () => {
+      const original = `127.0.0.1 localhost
+::1 localhost`;
+      const newBlock = `# BEGIN HOSTIE
+192.168.1.10 dev.local
+# END HOSTIE`;
+
+      const result = replaceManagedBlock(original, newBlock);
+
+      // Should append new block with blank line for readability
+      expect(result).toBe(`127.0.0.1 localhost
+::1 localhost
+
+# BEGIN HOSTIE
+192.168.1.10 dev.local
+# END HOSTIE`);
+    });
+
+    test("handles empty original content", () => {
+      const original = ``;
+      const newBlock = `# BEGIN HOSTIE
+192.168.1.10 dev.local
+# END HOSTIE`;
+
+      const result = replaceManagedBlock(original, newBlock);
+
+      expect(result).toBe(`# BEGIN HOSTIE
+192.168.1.10 dev.local
+# END HOSTIE`);
+    });
+
+    test("preserves blank lines for readability", () => {
+      const original = `127.0.0.1 localhost
+
+# BEGIN HOSTIE
+192.168.1.10 dev.local
+# END HOSTIE
+
+::1 localhost`;
+      const newBlock = `# BEGIN HOSTIE
+192.168.1.20 new.local
+# END HOSTIE`;
+
+      const result = replaceManagedBlock(original, newBlock);
+
+      // Should preserve blank lines before and after
+      expect(result).toBe(`127.0.0.1 localhost
+
+# BEGIN HOSTIE
+192.168.1.20 new.local
+# END HOSTIE
+
+::1 localhost`);
+    });
+
+    test("output is valid /etc/hosts format", () => {
+      const original = `127.0.0.1 localhost`;
+      const newBlock = `# BEGIN HOSTIE
+192.168.1.10 dev.local
+192.168.1.11 staging.local
+# END HOSTIE`;
+
+      const result = replaceManagedBlock(original, newBlock);
+
+      // Should contain valid IP addresses and hostnames
+      expect(result).toContain("127.0.0.1 localhost");
+      expect(result).toContain("192.168.1.10 dev.local");
+      expect(result).toContain("192.168.1.11 staging.local");
+      expect(result).toContain("# BEGIN HOSTIE");
+      expect(result).toContain("# END HOSTIE");
+    });
+
+    test("handles original with trailing newline", () => {
+      const original = `127.0.0.1 localhost\n`;
+      const newBlock = `# BEGIN HOSTIE
+192.168.1.10 dev.local
+# END HOSTIE`;
+
+      const result = replaceManagedBlock(original, newBlock);
+
+      // Should handle trailing newline gracefully
+      expect(result).toContain("127.0.0.1 localhost");
+      expect(result).toContain("# BEGIN HOSTIE");
+    });
+
+    test("handles original without trailing newline", () => {
+      const original = `127.0.0.1 localhost`;
+      const newBlock = `# BEGIN HOSTIE
+192.168.1.10 dev.local
+# END HOSTIE`;
+
+      const result = replaceManagedBlock(original, newBlock);
+
+      // Should add proper spacing
+      expect(result).toContain("127.0.0.1 localhost");
+      expect(result).toContain("# BEGIN HOSTIE");
+    });
+  });
   describe("writeEtcHosts", () => {
     test("writes content atomically using temp file", async () => {
       // This test verifies the atomic write mechanism exists
