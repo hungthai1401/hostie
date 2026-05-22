@@ -14,8 +14,9 @@
 | LavenderMist | done | hosts-cli-379.35 | — |
 | CharcoalPeak | done | hosts-cli-379.36 | — |
 | PlumRidge | done | hosts-cli-379.39 | — |
+| GarnetPeak | done | hosts-cli-379.48 | — |
 
 ## Progress
-- Batch 11: 1 bead completed (379.39)
-- Total completed: 34/62 beads
-- Remaining: 24 beads
+- Batch 12: 1 bead completed (379.48)
+- Total completed: 35/62 beads
+- Remaining: 23 beads
