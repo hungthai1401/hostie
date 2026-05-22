@@ -185,9 +185,9 @@ src/
 | **domain/id.ts** | LOW | Thin wrapper around `ulid` library | Unit tests (uniqueness, sortability) |
 | **core/yaml.ts** | MEDIUM | YAML parsing (external dep), atomic write logic | Unit tests (round-trip, atomic write, error cases) |
 | **core/render.ts** | LOW | Pure function (HostsFile → string) | Unit tests (group comments, disabled entries, aliases) |
-| **core/etchosts.ts** | HIGH | Writes to `/etc/hosts` (system file), managed block extraction | Unit tests with temp files + manual verification on real `/etc/hosts` |
+|| **core/etchosts.ts** | HIGH → MEDIUM | Writes to `/etc/hosts` (system file), managed block extraction | **Spike 1 CONFIRMED**: Extraction logic handles all edge cases (missing markers, empty blocks, multiple blocks). Whitespace normalization acceptable. Unit tests with temp files + manual verification on real `/etc/hosts` |
 | **core/diff.ts** | LOW | Pure function (string comparison) | Unit tests (added/removed/changed detection) |
-| **core/apply.ts** | HIGH | Orchestrates sudo re-exec, idempotency, error handling | Unit tests with mocks + manual verification with sudo |
+|| **core/apply.ts** | HIGH → MEDIUM | Orchestrates sudo re-exec, idempotency, error handling | **Spike 2 CONFIRMED**: Sudo re-exec works in interactive contexts. Non-interactive requires passwordless sudo or pre-auth (document in README). Unit tests with mocks + manual verification with sudo |
 | **cli/index.ts** | LOW | Thin commander setup | Integration tests (subcommand dispatch) |
 | **cli/commands/*.ts** | MEDIUM | 10+ subcommands, each with validation and file mutations | Integration tests per subcommand with temp fixtures |
 | **tui/state/store.ts** | MEDIUM | Zustand state management, dirty flag logic | Unit tests (state transitions, dirty flag) |
@@ -195,14 +195,14 @@ src/
 | **tui/App.tsx** | MEDIUM | Keybindings, modal orchestration, layout | Manual testing checklist |
 | **tui/hooks/useApply.ts** | HIGH | Sudo re-exec from TUI context | Manual testing with sudo prompt |
 | **Shell completion** | MEDIUM | Dynamic completion (hostname/group from `~/.hosts`) | Manual testing in bash/zsh/fish |
-| **Bun compile** | HIGH | External dependency (Bun toolchain), multi-platform builds | CI pipeline for 4 targets, manual verification per platform |
-| **DNS cache flush** | HIGH | Platform-specific commands (darwin vs linux), requires sudo | Manual verification on macOS and Linux |
+|| **Bun compile** | HIGH → LOW | External dependency (Bun toolchain), multi-platform builds | **Spike 4 CONFIRMED**: Cross-compilation works perfectly! All 4 targets build from any platform. CI pipeline for verification recommended but not required |
+|| **DNS cache flush** | HIGH → LOW | Platform-specific commands (darwin vs linux), requires sudo | **Spike 3 CONFIRMED**: Platform detection works. Make flush optional (best-effort). Warn on failure, don't fail apply. Manual verification on macOS and Linux |
 
-**HIGH-risk items requiring spikes or extra validation:**
-1. **core/etchosts.ts** — Managed block extraction with malformed input (missing END marker, nested markers)
-2. **core/apply.ts** — Sudo re-exec flow (interactive vs non-interactive, already-root case)
-3. **Bun compile** — Verify all 4 targets build and run (cannot cross-compile; need CI or VMs)
-4. **DNS cache flush** — Platform detection and correct flush commands (macOS: `dscacheutil + killall mDNSResponder`, Linux: `systemd-resolved` or `nscd`)
+**HIGH-risk items — spike results:**
+1. **core/etchosts.ts** — ✅ CONFIRMED (Spike 1): Extraction handles all edge cases. Whitespace normalization acceptable.
+2. **core/apply.ts** — ✅ CONFIRMED with caveats (Spike 2): Works in interactive contexts. Non-interactive requires passwordless sudo (document).
+3. **Bun compile** — ✅ CONFIRMED (Spike 4): Cross-compilation works! All 4 targets build from any platform.
+4. **DNS cache flush** — ✅ CONFIRMED with caveats (Spike 3): Platform detection works. Make flush optional (best-effort, warn on failure).
 
 ---
 

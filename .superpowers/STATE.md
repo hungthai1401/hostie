@@ -1,10 +1,15 @@
 ## Current
-- **Skill:** writing-plans
+- **Skill:** validating
 - **Feature:** hostie
-- **Epic:** —
-- **Phase:** gate-1-approved
+- **Epic:** hosts-cli-379
+- **Phase:** gate-2-approved
 
 ## Context
-Design locked. 19 decisions (D1–D19) approved. Greenfield Bun/TypeScript TUI-primary CLI for managing /etc/hosts via ~/.hosts YAML source. Full CRUD TUI + scriptable CLI subcommands. Managed block pattern. OpenTUI + React. Single compiled binary.
+Validation complete. All checks passed:
+- 19/19 decisions covered
+- 4/4 spikes confirmed (0 HIGH risks remaining)
+- 61 beads ready, 20 actionable
+- All 7 exit-state clauses verifiable
+- Dependency graph acyclic
 
-Next: writing-plans skill for discovery, approach, and bead decomposition.
+User approved execution. Ready to invoke swarming.
