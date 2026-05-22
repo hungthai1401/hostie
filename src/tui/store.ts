@@ -13,6 +13,19 @@ import { readHostsFile } from "../core/file-io";
 export type Mode = "normal" | "search" | "edit" | "modal";
 
 /**
+ * Modal types
+ */
+export type ModalType = "group-creator" | "entry-creator" | "entry-editor" | "confirmation";
+
+/**
+ * Modal state
+ */
+export interface ModalState {
+  type: ModalType;
+  data?: any;
+}
+
+/**
  * Application state
  */
 export interface AppState {
@@ -28,6 +41,8 @@ export interface AppState {
   mode: Mode;
   /** Whether there are unsaved changes */
   dirty: boolean;
+  /** Current modal state (null if no modal open) */
+  modal: ModalState | null;
 
   // Actions
   /** Load hosts file data into state */
@@ -52,6 +67,12 @@ export interface AppState {
   deleteEntry: (id: string) => void;
   /** Toggle entry enabled state */
   toggleEntry: (id: string) => void;
+  /** Add a new group */
+  addGroup: (name: string, parentPath?: string[]) => void;
+  /** Open a modal */
+  openModal: (type: ModalType, data?: any) => void;
+  /** Close the current modal */
+  closeModal: () => void;
 }
 
 /**
@@ -127,6 +148,7 @@ export const useAppStore = create<AppState>((set) => ({
   searchQuery: "",
   mode: "normal",
   dirty: false,
+  modal: null,
 
   // Actions
   loadHostsFile: (file) =>
@@ -204,7 +226,58 @@ export const useAppStore = create<AppState>((set) => ({
       },
       dirty: true,
     })),
+
+  addGroup: (name, parentPath) =>
+    set((state) => ({
+      hostsFile: {
+        ...state.hostsFile,
+        groups: addGroupToPath(state.hostsFile.groups, name, parentPath || []),
+      },
+      dirty: true,
+    })),
+
+  openModal: (type, data) =>
+    set({
+      modal: { type, data },
+      mode: "modal",
+    }),
+
+  closeModal: () =>
+    set({
+      modal: null,
+      mode: "normal",
+    }),
 }));
+
+/**
+ * Helper: Add a group to a specific path
+ */
+function addGroupToPath(groups: Group[], name: string, parentPath: string[]): Group[] {
+  if (parentPath.length === 0) {
+    // Add to root level
+    return [...groups, { name, entries: [], groups: [] }];
+  }
+
+  const [first, ...rest] = parentPath;
+
+  return groups.map((group) => {
+    if (group.name !== first) return group;
+
+    if (rest.length === 0) {
+      // Add to this group
+      return {
+        ...group,
+        groups: [...group.groups, { name, entries: [], groups: [] }],
+      };
+    }
+
+    // Recurse into nested groups
+    return {
+      ...group,
+      groups: addGroupToPath(group.groups, name, rest),
+    };
+  });
+}
 
 /**
  * Initialize store by loading ~/.hosts on first mount
