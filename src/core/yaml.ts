@@ -6,6 +6,19 @@ import YAML from "yaml";
 import type { HostsFile, Group, Entry } from "../domain/types";
 
 /**
+ * Serialize HostsFile to YAML string
+ * 
+ * @param data - HostsFile object to serialize
+ * @returns YAML string representation with 2-space indentation
+ */
+export function serializeHostsFile(data: HostsFile): string {
+  return YAML.stringify(data, {
+    indent: 2,
+    lineWidth: 0,
+    minContentWidth: 0,
+  });
+}
+/**
  * Deserialize YAML string to HostsFile
  * 
  * @param yaml - YAML string representation of a HostsFile
