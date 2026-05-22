@@ -1,11 +1,12 @@
 /**
  * Keyboard navigation hook for TUI
  * 
- * Handles j/k navigation, Tab focus switching, and updates store state.
+ * Handles j/k navigation, Tab focus switching, Space for toggling, and updates store state.
  */
 import { useInput } from "ink";
 import { useAppStore } from "../store";
 import type { Entry, Group } from "../../domain/types";
+import { writeHostsFile } from "../../core/file-io";
 
 /**
  * Focus area in the TUI
@@ -48,6 +49,7 @@ function flattenGroupPaths(groups: Group[], parentPath: string[] = []): string[]
  * Handles:
  * - j/k for up/down navigation
  * - Tab for focus switching between sidebar and main
+ * - Space for toggling entry enabled state
  * - Updates store with selected entry/group
  */
 export function useKeyboard() {
@@ -58,6 +60,7 @@ export function useKeyboard() {
     mode,
     selectEntry,
     selectGroup,
+    toggleEntry,
   } = useAppStore();
 
   // Track current focus area (sidebar or main)
@@ -146,6 +149,19 @@ export function useKeyboard() {
           selectEntry(entries[entries.length - 1].id);
         }
       }
+      return;
+    }
+
+    // Handle Space for toggling enabled state
+    if (input === " " && selectedEntryId) {
+      // Toggle the selected entry
+      toggleEntry(selectedEntryId);
+      
+      // Persist changes to ~/.hosts
+      writeHostsFile("~/.hosts", hostsFile).catch((err) => {
+        console.error("Failed to write hosts file:", err);
+      });
+      
       return;
     }
   });

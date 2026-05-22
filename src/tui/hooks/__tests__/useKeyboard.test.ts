@@ -129,4 +129,41 @@ describe("useKeyboard navigation logic", () => {
     useAppStore.getState().setMode("normal");
     expect(useAppStore.getState().mode).toBe("normal");
   });
+
+  test("toggleEntry changes enabled state and marks dirty", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "work",
+          entries: [
+            {
+              id: "entry-1",
+              ip: "127.0.0.1",
+              hostname: "test.local",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    };
+
+    useAppStore.getState().loadHostsFile(hostsFile);
+    expect(useAppStore.getState().dirty).toBe(false);
+
+    // Toggle entry from enabled to disabled
+    useAppStore.getState().toggleEntry("entry-1");
+    
+    // Check that enabled state changed
+    const entry = useAppStore.getState().hostsFile.groups[0].entries[0];
+    expect(entry.enabled).toBe(false);
+    expect(useAppStore.getState().dirty).toBe(true);
+
+    // Toggle back to enabled
+    useAppStore.getState().toggleEntry("entry-1");
+    const entryAfter = useAppStore.getState().hostsFile.groups[0].entries[0];
+    expect(entryAfter.enabled).toBe(true);
+  });
 });
