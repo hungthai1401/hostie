@@ -5,7 +5,10 @@
  * Only writes if content has changed to avoid unnecessary I/O
  */
 
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
+import { mkdtempSync, renameSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 // Type definitions matching design.md
 // These will be moved to domain/types.ts when that bead is implemented
@@ -37,6 +40,30 @@ export type ApplyResult = {
 const BEGIN_MARKER = "# BEGIN HOSTIE";
 const END_MARKER = "# END HOSTIE";
 const ETC_HOSTS_PATH = "/etc/hosts";
+
+/**
+ * Re-execute the current process with sudo
+ * 
+ * This function is called when EACCES is detected during /etc/hosts write.
+ * It re-execs the entire process with sudo, preserving all arguments and stdio.
+ * 
+ * @throws Never returns - calls process.exit() with sudo's exit code
+ */
+export async function reexecWithSudo(): Promise<never> {
+  // Check if already running as root
+  if (process.getuid && process.getuid() === 0) {
+    // Already root, cannot escalate further
+    throw new Error("Cannot write /etc/hosts even as root");
+  }
+  
+  // Re-exec with sudo, passing through all original arguments
+  const result = Bun.spawn(['sudo', Bun.argv[0], ...Bun.argv.slice(1)], {
+    stdio: ['inherit', 'inherit', 'inherit']
+  });
+  
+  await result.exited;
+  process.exit(result.exitCode ?? 1);
+}
 
 /**
  * Render a single entry to hosts file format
@@ -193,12 +220,27 @@ export async function applyHostsFile(hostsFile: HostsFile): Promise<ApplyResult>
       };
     }
     
-    // Content differs - would write here (actual write will be in etchosts.ts)
-    // For now, just return that it would change
-    return {
-      changed: true,
-      message: "/etc/hosts would be updated (write not implemented yet)",
-    };
+    // Content differs - write atomically
+    try {
+      // Atomic write: write to temp file, then rename
+      const tempDir = mkdtempSync(join(tmpdir(), 'hostie-'));
+      const tempFile = join(tempDir, 'hosts');
+      
+      writeFileSync(tempFile, newContent, 'utf-8');
+      renameSync(tempFile, ETC_HOSTS_PATH);
+      
+      return {
+        changed: true,
+        message: "/etc/hosts updated successfully",
+      };
+    } catch (writeErr: any) {
+      // Handle write-specific errors
+      if (writeErr.code === "EACCES") {
+        // Permission denied - re-exec with sudo
+        await reexecWithSudo();
+      }
+      throw writeErr;
+    }
     
   } catch (err: any) {
     // Handle errors gracefully
