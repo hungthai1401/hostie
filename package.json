@@ -4,8 +4,11 @@
   "type": "module",
   "dependencies": {
     "commander": "^14.0.3",
+    "ink": "^7.0.3",
+    "react": "^19.2.6",
     "ulid": "^2.3.0",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@types/bun": "latest"
