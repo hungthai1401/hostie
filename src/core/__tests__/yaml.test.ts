@@ -87,7 +87,9 @@ groups: [
     groups: []
 `;
 
-    expect(() => deserializeHostsFile(yaml)).toThrow(/version/i);
+    expect(() => deserializeHostsFile(yaml)).toThrow(
+      "Invalid ~/.hosts: missing version field"
+    );
   });
 
   test("throws error for unsupported version", () => {
@@ -95,7 +97,29 @@ groups: [
 groups: []
 `;
 
-    expect(() => deserializeHostsFile(yaml)).toThrow(/version/i);
+    expect(() => deserializeHostsFile(yaml)).toThrow(
+      "Unsupported ~/.hosts version 2. This tool supports version 1. Please upgrade hostie."
+    );
+  });
+
+  test("throws error for version less than 1", () => {
+    const yaml = `version: 0
+groups: []
+`;
+
+    expect(() => deserializeHostsFile(yaml)).toThrow(
+      "Invalid ~/.hosts: missing version field"
+    );
+  });
+
+  test("throws error for non-numeric version", () => {
+    const yaml = `version: "1"
+groups: []
+`;
+
+    expect(() => deserializeHostsFile(yaml)).toThrow(
+      "Invalid ~/.hosts: missing version field"
+    );
   });
 
   test("throws error for invalid schema", () => {

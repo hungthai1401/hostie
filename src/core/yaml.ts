@@ -31,15 +31,15 @@ export function deserializeHostsFile(yaml: string): HostsFile {
 
   const data = parsed as Record<string, unknown>;
 
-  // Validate version field exists
-  if (!("version" in data)) {
-    throw new Error("Invalid schema: missing required 'version' field");
+  // Validate version field exists and is a valid number
+  if (!('version' in data) || typeof data.version !== 'number' || data.version < 1) {
+    throw new Error('Invalid ~/.hosts: missing version field');
   }
 
-  // Validate version is supported
+  // Validate version is supported (only version 1)
   if (data.version !== 1) {
     throw new Error(
-      `Unsupported schema version: ${data.version} (only version 1 is supported)`
+      `Unsupported ~/.hosts version ${data.version}. This tool supports version 1. Please upgrade hostie.`
     );
   }
 
