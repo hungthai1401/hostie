@@ -4,7 +4,7 @@
  * Handles reading and writing /etc/hosts with proper error handling
  */
 
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, renameSync, unlinkSync, statSync, chmodSync } from "fs";
 
 const ETC_HOSTS_PATH = "/etc/hosts";
 
@@ -66,4 +66,51 @@ export function extractManagedBlock(content: string): {
     managed,
     after,
   };
+}
+
+/**
+ * Write content to /etc/hosts atomically
+ * 
+ * Uses a temp file + rename strategy to ensure atomic writes.
+ * Preserves file permissions (644).
+ * Cleans up temp file on error.
+ * 
+ * @param content - Full content to write to /etc/hosts
+ * @throws Error if write fails (e.g., EACCES for permission denied)
+ */
+export async function writeEtcHosts(content: string): Promise<void> {
+  const tempPath = `${ETC_HOSTS_PATH}.tmp`;
+  
+  try {
+    // Get current permissions if file exists
+    let currentMode = 0o644; // Default to 644
+    try {
+      const stats = statSync(ETC_HOSTS_PATH);
+      currentMode = stats.mode;
+    } catch (err: any) {
+      // If file doesn't exist, use default 644
+      if (err.code !== "ENOENT") {
+        throw err;
+      }
+    }
+    
+    // Write to temp file first
+    writeFileSync(tempPath, content, "utf-8");
+    
+    // Set permissions on temp file to match original
+    chmodSync(tempPath, currentMode);
+    
+    // Atomic rename (replaces /etc/hosts)
+    renameSync(tempPath, ETC_HOSTS_PATH);
+  } catch (err: any) {
+    // Clean up temp file if it exists
+    try {
+      unlinkSync(tempPath);
+    } catch {
+      // Ignore cleanup errors
+    }
+    
+    // Re-throw the original error
+    throw err;
+  }
 }
