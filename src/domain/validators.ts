@@ -4,6 +4,8 @@
  * Implements validation rules for hostnames, IPs, and other domain entities.
  */
 
+import type { Entry } from "./types";
+
 /**
  * Validation result type
  */
@@ -306,5 +308,61 @@ export function validateIP(ip: string): ValidationResult {
   return {
     valid: false,
     error: "Invalid IP address (neither valid IPv4 nor IPv6)",
+  };
+}
+
+/**
+ * Validates that no two enabled entries have duplicate hostnames or aliases.
+ * 
+ * Rules:
+ * - Only checks enabled entries (disabled entries can have duplicates)
+ * - Case-insensitive comparison
+ * - Checks both hostnames and aliases
+ * - A hostname cannot conflict with another hostname or alias
+ * 
+ * @param entries - Array of entries to validate
+ * @returns ValidationResult with valid flag and optional error message
+ */
+export function validateNoDuplicates(entries: Entry[]): ValidationResult {
+  // Filter to only enabled entries
+  const enabledEntries = entries.filter(entry => entry.enabled);
+
+  // If 0 or 1 enabled entries, no duplicates possible
+  if (enabledEntries.length <= 1) {
+    return {
+      valid: true,
+    };
+  }
+
+  // Collect all hostnames and aliases (case-insensitive)
+  const seenNames = new Map<string, string>(); // lowercase -> original
+
+  for (const entry of enabledEntries) {
+    // Check hostname
+    const hostnameLower = entry.hostname.toLowerCase();
+    if (seenNames.has(hostnameLower)) {
+      return {
+        valid: false,
+        error: `Duplicate hostname "${hostnameLower}" found in enabled entries`,
+      };
+    }
+    seenNames.set(hostnameLower, entry.hostname);
+
+    // Check aliases
+    for (const alias of entry.aliases) {
+      const aliasLower = alias.toLowerCase();
+      if (seenNames.has(aliasLower)) {
+        return {
+          valid: false,
+          error: `Duplicate hostname/alias "${aliasLower}" found in enabled entries`,
+        };
+      }
+      seenNames.set(aliasLower, alias);
+    }
+  }
+
+  // All checks passed
+  return {
+    valid: true,
   };
 }

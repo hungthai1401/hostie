@@ -3,7 +3,9 @@ import {
   validateIPv4,
   validateIPv6,
   validateIP,
+  validateNoDuplicates,
 } from "../validators";
+import type { Entry } from "../types";
 
 describe("validateIPv4", () => {
   test("accepts valid IPv4 addresses", () => {
@@ -125,5 +127,92 @@ describe("validateIP", () => {
     const result = validateIP("not-an-ip");
     expect(result.valid).toBe(false);
     expect(result.error).toBeDefined();
+  });
+});
+
+describe("validateNoDuplicates", () => {
+  test("accepts entries with unique hostnames", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: [], enabled: true },
+      { id: "2", ip: "127.0.0.2", hostname: "test.com", aliases: [], enabled: true },
+    ];
+    expect(validateNoDuplicates(entries)).toEqual({ valid: true });
+  });
+
+  test("detects duplicate hostnames in enabled entries", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: [], enabled: true },
+      { id: "2", ip: "127.0.0.2", hostname: "example.com", aliases: [], enabled: true },
+    ];
+    const result = validateNoDuplicates(entries);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("example.com");
+  });
+
+  test("detects duplicate hostnames case-insensitively", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: [], enabled: true },
+      { id: "2", ip: "127.0.0.2", hostname: "EXAMPLE.COM", aliases: [], enabled: true },
+    ];
+    const result = validateNoDuplicates(entries);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("example.com");
+  });
+
+  test("detects duplicate aliases in enabled entries", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: ["alias1.com"], enabled: true },
+      { id: "2", ip: "127.0.0.2", hostname: "test.com", aliases: ["alias1.com"], enabled: true },
+    ];
+    const result = validateNoDuplicates(entries);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("alias1.com");
+  });
+
+  test("detects hostname that conflicts with alias", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: [], enabled: true },
+      { id: "2", ip: "127.0.0.2", hostname: "test.com", aliases: ["example.com"], enabled: true },
+    ];
+    const result = validateNoDuplicates(entries);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("example.com");
+  });
+
+  test("allows duplicates if one entry is disabled", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: [], enabled: true },
+      { id: "2", ip: "127.0.0.2", hostname: "example.com", aliases: [], enabled: false },
+    ];
+    expect(validateNoDuplicates(entries)).toEqual({ valid: true });
+  });
+
+  test("allows duplicates if both entries are disabled", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: [], enabled: false },
+      { id: "2", ip: "127.0.0.2", hostname: "example.com", aliases: [], enabled: false },
+    ];
+    expect(validateNoDuplicates(entries)).toEqual({ valid: true });
+  });
+
+  test("accepts empty array", () => {
+    expect(validateNoDuplicates([])).toEqual({ valid: true });
+  });
+
+  test("accepts single entry", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: [], enabled: true },
+    ];
+    expect(validateNoDuplicates(entries)).toEqual({ valid: true });
+  });
+
+  test("detects multiple aliases conflict", () => {
+    const entries: Entry[] = [
+      { id: "1", ip: "127.0.0.1", hostname: "example.com", aliases: ["alias1.com", "alias2.com"], enabled: true },
+      { id: "2", ip: "127.0.0.2", hostname: "test.com", aliases: ["alias3.com", "alias2.com"], enabled: true },
+    ];
+    const result = validateNoDuplicates(entries);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("alias2.com");
   });
 });
