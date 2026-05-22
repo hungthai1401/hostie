@@ -4,8 +4,9 @@
  * Generates shell completion scripts for bash, zsh, and fish
  */
 
-export type Shell = "bash" | "zsh" | "fish";
+import { ExitCode } from "../exit-codes";
 
+export type Shell = "bash" | "zsh" | "fish";
 /**
  * Execute the completion command
  * 
@@ -16,16 +17,16 @@ export async function completionCommand(shell: Shell): Promise<number> {
   switch (shell) {
     case "bash":
       console.log(BASH_COMPLETION);
-      return 0;
+      return ExitCode.SUCCESS;
     case "zsh":
       console.log(ZSH_COMPLETION);
-      return 0;
+      return ExitCode.SUCCESS;
     case "fish":
       console.log(FISH_COMPLETION);
-      return 0;
+      return ExitCode.SUCCESS;
     default:
       console.error(`Error: Unsupported shell "${shell}". Supported shells: bash, zsh, fish`);
-      return 1;
+      return ExitCode.VALIDATION;
   }
 }
 

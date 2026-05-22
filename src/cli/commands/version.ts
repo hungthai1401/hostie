@@ -7,6 +7,7 @@
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { ExitCode } from "../exit-codes";
 
 /**
  * Execute the version command
@@ -25,9 +26,9 @@ export async function versionCommand(): Promise<number> {
     // Output: 'hostie v<version>'
     console.log(`hostie v${version}`);
 
-    return 0;
+    return ExitCode.SUCCESS;
   } catch (err: any) {
     console.error(`Error: ${err.message}`);
-    return 1;
+    return ExitCode.IO_ERROR;
   }
 }

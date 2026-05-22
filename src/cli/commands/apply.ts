@@ -8,6 +8,7 @@
 import { readHostsFile } from "../../core/file-io";
 import { applyHostsFile } from "../../core/apply";
 import { renderHostsFile } from "../../core/render";
+import { ExitCode } from "../exit-codes";
 
 export type ApplyOptions = {
   dryRun?: boolean;
@@ -39,7 +40,7 @@ export async function applyCommand(options: ApplyOptions): Promise<number> {
         console.log("─".repeat(60));
       }
       
-      return 0;
+      return ExitCode.SUCCESS;
     }
 
     // Apply changes to /etc/hosts
@@ -51,7 +52,7 @@ export async function applyCommand(options: ApplyOptions): Promise<number> {
       console.log("○ " + result.message);
     }
 
-    return 0;
+    return ExitCode.SUCCESS;
 
   } catch (err: any) {
     // Handle permission errors
@@ -63,17 +64,17 @@ export async function applyCommand(options: ApplyOptions): Promise<number> {
       console.error("  sudo hostie apply");
       console.error("");
       console.error("In CI/scripts: Configure passwordless sudo or run 'sudo -v' before hostie");
-      return 3;
+      return ExitCode.PERMISSION;
     }
 
     // Handle I/O errors
     if (err.code === "ENOENT") {
       console.error(`Error: File not found - ${err.message}`);
-      return 2;
+      return ExitCode.IO_ERROR;
     }
 
     // Handle other I/O errors
     console.error(`Error: ${err.message}`);
-    return 2;
+    return ExitCode.IO_ERROR;
   }
 }

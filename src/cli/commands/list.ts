@@ -6,6 +6,7 @@
 
 import { readHostsFile } from "../../core/file-io";
 import type { Entry, Group, HostsFile } from "../../domain/types";
+import { ExitCode } from "../exit-codes";
 
 export type ListOptions = {
   json?: boolean;
@@ -40,12 +41,12 @@ export async function listCommand(options: ListOptions = {}): Promise<number> {
       printTable(entriesWithGroups);
     }
 
-    return 0;
+    return ExitCode.SUCCESS;
 
   } catch (err: any) {
     // Handle I/O errors
     console.error(`Error: ${err.message}`);
-    return 2;
+    return ExitCode.IO_ERROR;
   }
 }
 

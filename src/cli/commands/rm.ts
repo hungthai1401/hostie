@@ -6,6 +6,7 @@
 
 import { readHostsFile, writeHostsFile } from "../../core/file-io";
 import type { HostsFile, Group } from "../../domain/types";
+import { ExitCode } from "../exit-codes";
 
 /**
  * Execute the rm command
@@ -27,19 +28,19 @@ export async function rmCommand(hostname: string): Promise<number> {
     // If not found, return exit code 1
     if (!found) {
       console.error(`Error: Hostname '${hostname}' not found`);
-      return 1;
+      return ExitCode.VALIDATION;
     }
 
     // Write back to ~/.hosts
     await writeHostsFile("~/.hosts", updatedHostsFile);
 
     console.log(`✓ Removed '${hostname}'`);
-    return 0;
+    return ExitCode.SUCCESS;
 
   } catch (err: any) {
     // Handle I/O errors
     console.error(`Error: ${err.message}`);
-    return 2;
+    return ExitCode.IO_ERROR;
   }
 }
 

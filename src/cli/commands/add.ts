@@ -8,6 +8,7 @@ import { readHostsFile, writeHostsFile } from "../../core/file-io";
 import { validateIP, validateHostname, validateNoDuplicates } from "../../domain/validators";
 import { generateId } from "../../domain/id";
 import type { Entry, Group, HostsFile } from "../../domain/types";
+import { ExitCode } from "../exit-codes";
 
 export type AddOptions = {
   group?: string;
@@ -36,14 +37,14 @@ export async function addCommand(
     const ipValidation = validateIP(ip);
     if (!ipValidation.valid) {
       console.error(`Error: ${ipValidation.error}`);
-      return 1;
+      return ExitCode.VALIDATION;
     }
 
     // Validate hostname
     const hostnameValidation = validateHostname(hostname);
     if (!hostnameValidation.valid) {
       console.error(`Error: ${hostnameValidation.error}`);
-      return 1;
+      return ExitCode.VALIDATION;
     }
 
     // Validate aliases
@@ -51,7 +52,7 @@ export async function addCommand(
       const aliasValidation = validateHostname(alias);
       if (!aliasValidation.valid) {
         console.error(`Error: Invalid alias "${alias}" - ${aliasValidation.error}`);
-        return 1;
+        return ExitCode.VALIDATION;
       }
     }
 
@@ -74,7 +75,7 @@ export async function addCommand(
     const duplicateCheck = validateNoDuplicates([...allEntries, newEntry]);
     if (!duplicateCheck.valid) {
       console.error(`Error: ${duplicateCheck.error}`);
-      return 1;
+      return ExitCode.VALIDATION;
     }
 
     // Add entry to the appropriate location
@@ -91,18 +92,18 @@ export async function addCommand(
     await writeHostsFile(hostsFilePath, hostsFile);
 
     console.log(`✓ Added ${hostname} (${ip})`);
-    return 0;
+    return ExitCode.SUCCESS;
 
   } catch (err: any) {
     // Handle I/O errors
     if (err.code === "EACCES" || err.code === "ENOENT" || err.code === "EPERM") {
       console.error(`Error: ${err.message}`);
-      return 2;
+      return ExitCode.IO_ERROR;
     }
 
     // Handle other errors
     console.error(`Error: ${err.message}`);
-    return 2;
+    return ExitCode.IO_ERROR;
   }
 }
 

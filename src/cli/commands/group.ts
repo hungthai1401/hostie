@@ -6,6 +6,7 @@
 
 import { readHostsFile, writeHostsFile } from "../../core/file-io";
 import type { Group, HostsFile, Entry } from "../../domain/types";
+import { ExitCode } from "../exit-codes";
 
 export type GroupCreateOptions = {
   parent?: string;
@@ -131,7 +132,7 @@ export async function groupCreateCommand(
     const nameValidation = validateGroupName(name);
     if (!nameValidation.valid) {
       console.error(`Error: ${nameValidation.error}`);
-      return 1;
+      return ExitCode.VALIDATION;
     }
 
     // Read existing hosts file
@@ -148,7 +149,7 @@ export async function groupCreateCommand(
       
       if (!parentGroup) {
         console.error(`Error: Parent group "${options.parent}" does not exist`);
-        return 1;
+        return ExitCode.VALIDATION;
       }
       
       targetGroups = parentGroup.groups;
@@ -163,7 +164,7 @@ export async function groupCreateCommand(
     if (groupExists(targetGroups, name)) {
       const fullPath = parentPath ? `${parentPath}/${name}` : name;
       console.error(`Error: Group "${fullPath}" already exists`);
-      return 1;
+      return ExitCode.VALIDATION;
     }
 
     // Create new group
@@ -180,18 +181,18 @@ export async function groupCreateCommand(
 
     const fullPath = parentPath ? `${parentPath}/${name}` : name;
     console.log(`✓ Created group "${fullPath}"`);
-    return 0;
+    return ExitCode.SUCCESS;
 
   } catch (err: any) {
     // Handle I/O errors
     if (err.code === "EACCES" || err.code === "ENOENT" || err.code === "EPERM") {
       console.error(`Error: ${err.message}`);
-      return 2;
+      return ExitCode.IO_ERROR;
     }
 
     // Handle other errors
     console.error(`Error: ${err.message}`);
-    return 2;
+    return ExitCode.IO_ERROR;
   }
 }
 
@@ -222,7 +223,7 @@ export async function groupAddCommand(
     
     if (!targetGroup) {
       console.error(`Error: Group "${groupName}" does not exist`);
-      return 1;
+      return ExitCode.VALIDATION;
     }
 
     // Find and extract the entry from its current location
@@ -234,7 +235,7 @@ export async function groupAddCommand(
     // If entry not found, return exit code 1
     if (!foundEntry) {
       console.error(`Error: Entry with hostname '${hostname}' not found`);
-      return 1;
+      return ExitCode.VALIDATION;
     }
 
     // Add the entry to the target group
@@ -244,18 +245,18 @@ export async function groupAddCommand(
     await writeHostsFile(hostsFilePath, finalHostsFile);
 
     console.log(`✓ Moved '${hostname}' to group "${groupName}"`);
-    return 0;
+    return ExitCode.SUCCESS;
 
   } catch (err: any) {
     // Handle I/O errors
     if (err.code === "EACCES" || err.code === "ENOENT" || err.code === "EPERM") {
       console.error(`Error: ${err.message}`);
-      return 2;
+      return ExitCode.IO_ERROR;
     }
 
     // Handle other errors
     console.error(`Error: ${err.message}`);
-    return 2;
+    return ExitCode.IO_ERROR;
   }
 }
 
