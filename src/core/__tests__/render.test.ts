@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { renderEntry } from "../render";
+import { renderEntry, wrapManagedBlock, renderHostsFile } from "../render";
 import type { Entry } from "../../domain/types";
 
 describe("renderEntry", () => {
@@ -119,5 +119,169 @@ describe("renderEntry", () => {
       comment: "Server (production) - do not modify!",
     };
     expect(renderEntry(entry)).toBe("192.168.1.1 example.com # Server (production) - do not modify!");
+  });
+});
+
+describe("wrapManagedBlock", () => {
+  test("wraps content with BEGIN/END markers", () => {
+    const content = "192.168.1.1 example.com";
+    const result = wrapManagedBlock(content);
+    expect(result).toBe("# BEGIN HOSTIE\n\n192.168.1.1 example.com\n\n# END HOSTIE");
+  });
+
+  test("wraps multi-line content", () => {
+    const content = "192.168.1.1 example.com\n192.168.1.2 test.com";
+    const result = wrapManagedBlock(content);
+    expect(result).toBe("# BEGIN HOSTIE\n\n192.168.1.1 example.com\n192.168.1.2 test.com\n\n# END HOSTIE");
+  });
+
+  test("wraps empty content", () => {
+    const content = "";
+    const result = wrapManagedBlock(content);
+    expect(result).toBe("# BEGIN HOSTIE\n\n\n\n# END HOSTIE");
+  });
+});
+
+describe("renderHostsFile", () => {
+  test("renders empty hosts file", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [],
+    };
+    const result = renderHostsFile(hostsFile);
+    expect(result).toBe("# BEGIN HOSTIE\n\n\n\n# END HOSTIE");
+  });
+
+  test("renders single enabled entry", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "test",
+          entries: [
+            {
+              id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+              ip: "192.168.1.1",
+              hostname: "example.com",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    };
+    const result = renderHostsFile(hostsFile);
+    expect(result).toContain("192.168.1.1 example.com");
+    expect(result).toContain("# BEGIN HOSTIE");
+    expect(result).toContain("# END HOSTIE");
+  });
+
+  test("filters out disabled entries", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "test",
+          entries: [
+            {
+              id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+              ip: "192.168.1.1",
+              hostname: "enabled.com",
+              aliases: [],
+              enabled: true,
+            },
+            {
+              id: "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+              ip: "192.168.1.2",
+              hostname: "disabled.com",
+              aliases: [],
+              enabled: false,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    };
+    const result = renderHostsFile(hostsFile);
+    expect(result).toContain("192.168.1.1 enabled.com");
+    expect(result).not.toContain("192.168.1.2 disabled.com");
+  });
+
+  test("flattens nested groups", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "parent",
+          entries: [
+            {
+              id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+              ip: "192.168.1.1",
+              hostname: "parent.com",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [
+            {
+              name: "child",
+              entries: [
+                {
+                  id: "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+                  ip: "192.168.1.2",
+                  hostname: "child.com",
+                  aliases: [],
+                  enabled: true,
+                },
+              ],
+              groups: [],
+            },
+          ],
+        },
+      ],
+    };
+    const result = renderHostsFile(hostsFile);
+    expect(result).toContain("192.168.1.1 parent.com");
+    expect(result).toContain("192.168.1.2 child.com");
+    expect(result).toContain("# BEGIN HOSTIE");
+    expect(result).toContain("# END HOSTIE");
+  });
+
+  test("renders multiple groups", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "group1",
+          entries: [
+            {
+              id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+              ip: "192.168.1.1",
+              hostname: "one.com",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+        {
+          name: "group2",
+          entries: [
+            {
+              id: "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+              ip: "192.168.1.2",
+              hostname: "two.com",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    };
+    const result = renderHostsFile(hostsFile);
+    expect(result).toContain("192.168.1.1 one.com");
+    expect(result).toContain("192.168.1.2 two.com");
   });
 });
