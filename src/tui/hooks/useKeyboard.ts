@@ -61,6 +61,10 @@ export function useKeyboard() {
     selectEntry,
     selectGroup,
     toggleEntry,
+    deleteEntry,
+    openModal,
+    closeModal,
+    markDirty,
   } = useAppStore();
 
   // Track current focus area (sidebar or main)
@@ -162,6 +166,45 @@ export function useKeyboard() {
         console.error("Failed to write hosts file:", err);
       });
       
+      return;
+    }
+
+    // Handle 'd' for deleting entry
+    if (input === "d" && selectedEntryId) {
+      const entries = flattenEntries(hostsFile.groups);
+      const currentIndex = entries.findIndex((e) => e.id === selectedEntryId);
+      
+      // Open confirmation modal with callbacks
+      openModal("confirmation", {
+        message: "Delete this entry?",
+        onConfirm: () => {
+          // Delete the entry
+          deleteEntry(selectedEntryId);
+          
+          // Move selection to next entry (or previous if last)
+          if (entries.length > 1) {
+            if (currentIndex < entries.length - 1) {
+              // Select next entry
+              selectEntry(entries[currentIndex + 1].id);
+            } else if (currentIndex > 0) {
+              // Select previous entry (we're at the end)
+              selectEntry(entries[currentIndex - 1].id);
+            }
+          }
+          
+          // Persist changes to ~/.hosts
+          writeHostsFile("~/.hosts", hostsFile).catch((err) => {
+            console.error("Failed to write hosts file:", err);
+          });
+          
+          // Close modal
+          closeModal();
+        },
+        onCancel: () => {
+          // Just close the modal
+          closeModal();
+        },
+      });
       return;
     }
   });

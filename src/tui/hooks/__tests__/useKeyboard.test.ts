@@ -166,4 +166,141 @@ describe("useKeyboard navigation logic", () => {
     const entryAfter = useAppStore.getState().hostsFile.groups[0].entries[0];
     expect(entryAfter.enabled).toBe(true);
   });
+
+  test("deleteEntry removes entry and marks dirty", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "work",
+          entries: [
+            {
+              id: "entry-1",
+              ip: "127.0.0.1",
+              hostname: "test.local",
+              aliases: [],
+              enabled: true,
+            },
+            {
+              id: "entry-2",
+              ip: "127.0.0.2",
+              hostname: "test2.local",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    };
+
+    useAppStore.getState().loadHostsFile(hostsFile);
+    useAppStore.getState().selectEntry("entry-1");
+    expect(useAppStore.getState().dirty).toBe(false);
+
+    // Delete entry
+    useAppStore.getState().deleteEntry("entry-1");
+    
+    // Check that entry was removed
+    const entries = useAppStore.getState().hostsFile.groups[0].entries;
+    expect(entries.length).toBe(1);
+    expect(entries[0].id).toBe("entry-2");
+    expect(useAppStore.getState().dirty).toBe(true);
+    
+    // Check that selection was cleared since deleted entry was selected
+    expect(useAppStore.getState().selectedEntryId).toBe(null);
+  });
+
+  test("openModal sets modal state and changes mode", () => {
+    useAppStore.getState().openModal("confirmation", { message: "Delete this entry?" });
+    
+    const state = useAppStore.getState();
+    expect(state.modal).toEqual({ type: "confirmation", data: { message: "Delete this entry?" } });
+    expect(state.mode).toBe("modal");
+  });
+
+  test("closeModal clears modal state and returns to normal mode", () => {
+    useAppStore.getState().openModal("confirmation", { message: "Delete this entry?" });
+    expect(useAppStore.getState().mode).toBe("modal");
+    
+    useAppStore.getState().closeModal();
+    
+    const state = useAppStore.getState();
+    expect(state.modal).toBe(null);
+    expect(state.mode).toBe("normal");
+  });
+
+  test("delete entry flow: modal opens, confirm deletes and moves selection", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "work",
+          entries: [
+            {
+              id: "entry-1",
+              ip: "127.0.0.1",
+              hostname: "test1.local",
+              aliases: [],
+              enabled: true,
+            },
+            {
+              id: "entry-2",
+              ip: "127.0.0.2",
+              hostname: "test2.local",
+              aliases: [],
+              enabled: true,
+            },
+            {
+              id: "entry-3",
+              ip: "127.0.0.3",
+              hostname: "test3.local",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    };
+
+    useAppStore.getState().loadHostsFile(hostsFile);
+    useAppStore.getState().selectEntry("entry-2");
+
+    // Simulate opening delete confirmation modal
+    useAppStore.getState().openModal("confirmation", {
+      message: "Delete this entry?",
+      onConfirm: () => {
+        useAppStore.getState().deleteEntry("entry-2");
+        // Selection should move to next entry (entry-3)
+        useAppStore.getState().selectEntry("entry-3");
+        useAppStore.getState().closeModal();
+      },
+      onCancel: () => {
+        useAppStore.getState().closeModal();
+      },
+    });
+
+    // Verify modal is open
+    expect(useAppStore.getState().mode).toBe("modal");
+    expect(useAppStore.getState().modal?.type).toBe("confirmation");
+
+    // Simulate user confirming
+    const modal = useAppStore.getState().modal;
+    if (modal?.data?.onConfirm) {
+      modal.data.onConfirm();
+    }
+
+    // Verify entry was deleted
+    const entries = useAppStore.getState().hostsFile.groups[0].entries;
+    expect(entries.length).toBe(2);
+    expect(entries.find((e) => e.id === "entry-2")).toBeUndefined();
+
+    // Verify selection moved to next entry
+    expect(useAppStore.getState().selectedEntryId).toBe("entry-3");
+
+    // Verify modal was closed
+    expect(useAppStore.getState().modal).toBe(null);
+    expect(useAppStore.getState().mode).toBe("normal");
+  });
 });
