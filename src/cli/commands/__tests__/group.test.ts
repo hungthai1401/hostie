@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { groupCreateCommand } from "../group";
+import { groupCreateCommand, groupAddCommand } from "../group";
 import { readHostsFile, writeHostsFile } from "../../../core/file-io";
 import { existsSync, unlinkSync } from "fs";
 import { homedir } from "os";
@@ -173,6 +173,191 @@ describe("groupCreateCommand", () => {
 
   test("returns exit code 2 on I/O error", async () => {
     const exitCode = await groupCreateCommand("my-group", {
+      hostsFile: "/nonexistent/path/hosts",
+    });
+
+    expect(exitCode).toBe(2);
+  });
+});
+
+describe("groupAddCommand", () => {
+  test("moves entry to group successfully", async () => {
+    // Create a group and an entry
+    await writeHostsFile(TEST_HOSTS_FILE, {
+      version: 1,
+      groups: [
+        {
+          name: "work",
+          entries: [],
+          groups: [],
+        },
+        {
+          name: "ungrouped",
+          entries: [
+            {
+              id: "01J5ABC123",
+              ip: "192.168.1.10",
+              hostname: "test.local",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    });
+
+    const exitCode = await groupAddCommand("work", "test.local", {
+      hostsFile: TEST_HOSTS_FILE,
+    });
+
+    expect(exitCode).toBe(0);
+
+    const hostsFile = await readHostsFile(TEST_HOSTS_FILE);
+    const workGroup = hostsFile.groups.find(g => g.name === "work");
+    const ungroupedGroup = hostsFile.groups.find(g => g.name === "ungrouped");
+    
+    expect(workGroup?.entries.length).toBe(1);
+    expect(workGroup?.entries[0].hostname).toBe("test.local");
+    expect(ungroupedGroup?.entries.length).toBe(0);
+  });
+
+  test("moves entry from nested group to another group", async () => {
+    await writeHostsFile(TEST_HOSTS_FILE, {
+      version: 1,
+      groups: [
+        {
+          name: "work",
+          entries: [],
+          groups: [
+            {
+              name: "prod",
+              entries: [
+                {
+                  id: "01J5ABC123",
+                  ip: "10.0.1.5",
+                  hostname: "db.prod.work",
+                  aliases: [],
+                  enabled: true,
+                },
+              ],
+              groups: [],
+            },
+          ],
+        },
+        {
+          name: "staging",
+          entries: [],
+          groups: [],
+        },
+      ],
+    });
+
+    const exitCode = await groupAddCommand("staging", "db.prod.work", {
+      hostsFile: TEST_HOSTS_FILE,
+    });
+
+    expect(exitCode).toBe(0);
+
+    const hostsFile = await readHostsFile(TEST_HOSTS_FILE);
+    const stagingGroup = hostsFile.groups.find(g => g.name === "staging");
+    const workGroup = hostsFile.groups.find(g => g.name === "work");
+    const prodGroup = workGroup?.groups.find(g => g.name === "prod");
+    
+    expect(stagingGroup?.entries.length).toBe(1);
+    expect(stagingGroup?.entries[0].hostname).toBe("db.prod.work");
+    expect(prodGroup?.entries.length).toBe(0);
+  });
+
+  test("moves entry to nested group using path", async () => {
+    await writeHostsFile(TEST_HOSTS_FILE, {
+      version: 1,
+      groups: [
+        {
+          name: "work",
+          entries: [
+            {
+              id: "01J5ABC123",
+              ip: "10.0.1.5",
+              hostname: "api.work",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [
+            {
+              name: "prod",
+              entries: [],
+              groups: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    const exitCode = await groupAddCommand("work/prod", "api.work", {
+      hostsFile: TEST_HOSTS_FILE,
+    });
+
+    expect(exitCode).toBe(0);
+
+    const hostsFile = await readHostsFile(TEST_HOSTS_FILE);
+    const workGroup = hostsFile.groups.find(g => g.name === "work");
+    const prodGroup = workGroup?.groups.find(g => g.name === "prod");
+    
+    expect(workGroup?.entries.length).toBe(0);
+    expect(prodGroup?.entries.length).toBe(1);
+    expect(prodGroup?.entries[0].hostname).toBe("api.work");
+  });
+
+  test("returns exit code 1 when entry not found", async () => {
+    await writeHostsFile(TEST_HOSTS_FILE, {
+      version: 1,
+      groups: [
+        {
+          name: "work",
+          entries: [],
+          groups: [],
+        },
+      ],
+    });
+
+    const exitCode = await groupAddCommand("work", "nonexistent.local", {
+      hostsFile: TEST_HOSTS_FILE,
+    });
+
+    expect(exitCode).toBe(1);
+  });
+
+  test("returns exit code 1 when group not found", async () => {
+    await writeHostsFile(TEST_HOSTS_FILE, {
+      version: 1,
+      groups: [
+        {
+          name: "work",
+          entries: [
+            {
+              id: "01J5ABC123",
+              ip: "192.168.1.10",
+              hostname: "test.local",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    });
+
+    const exitCode = await groupAddCommand("nonexistent", "test.local", {
+      hostsFile: TEST_HOSTS_FILE,
+    });
+
+    expect(exitCode).toBe(1);
+  });
+
+  test("returns exit code 2 on I/O error", async () => {
+    const exitCode = await groupAddCommand("work", "test.local", {
       hostsFile: "/nonexistent/path/hosts",
     });
 

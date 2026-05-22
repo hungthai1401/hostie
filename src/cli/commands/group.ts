@@ -5,7 +5,7 @@
  */
 
 import { readHostsFile, writeHostsFile } from "../../core/file-io";
-import type { Group, HostsFile } from "../../domain/types";
+import type { Group, HostsFile, Entry } from "../../domain/types";
 
 export type GroupCreateOptions = {
   parent?: string;
@@ -193,4 +193,198 @@ export async function groupCreateCommand(
     console.error(`Error: ${err.message}`);
     return 2;
   }
+}
+
+export type GroupAddOptions = {
+  hostsFile?: string;
+};
+
+/**
+ * Execute the group add command (moves an entry to a group)
+ * 
+ * @param groupName - Target group path (e.g., "work" or "work/prod")
+ * @param hostname - Hostname of the entry to move
+ * @param options - Command options
+ * @returns Exit code (0 = success, 1 = entry/group not found, 2 = I/O error)
+ */
+export async function groupAddCommand(
+  groupName: string,
+  hostname: string,
+  options: GroupAddOptions = {}
+): Promise<number> {
+  try {
+    // Read existing hosts file
+    const hostsFilePath = options.hostsFile || "~/.hosts";
+    const hostsFile = await readHostsFile(hostsFilePath);
+
+    // Find the target group
+    const targetGroup = findGroupByPath(hostsFile, groupName);
+    
+    if (!targetGroup) {
+      console.error(`Error: Group "${groupName}" does not exist`);
+      return 1;
+    }
+
+    // Find and extract the entry from its current location
+    let foundEntry: Entry | null = null;
+    const updatedHostsFile = extractEntryByHostname(hostsFile, hostname, (entry) => {
+      foundEntry = entry;
+    });
+
+    // If entry not found, return exit code 1
+    if (!foundEntry) {
+      console.error(`Error: Entry with hostname '${hostname}' not found`);
+      return 1;
+    }
+
+    // Add the entry to the target group
+    const finalHostsFile = addEntryToGroup(updatedHostsFile, groupName, foundEntry);
+
+    // Write back to file
+    await writeHostsFile(hostsFilePath, finalHostsFile);
+
+    console.log(`✓ Moved '${hostname}' to group "${groupName}"`);
+    return 0;
+
+  } catch (err: any) {
+    // Handle I/O errors
+    if (err.code === "EACCES" || err.code === "ENOENT" || err.code === "EPERM") {
+      console.error(`Error: ${err.message}`);
+      return 2;
+    }
+
+    // Handle other errors
+    console.error(`Error: ${err.message}`);
+    return 2;
+  }
+}
+
+/**
+ * Extract an entry by hostname from the hosts file (removes it from its current location)
+ * 
+ * @param hostsFile - The hosts file structure
+ * @param hostname - Hostname to extract
+ * @param onFound - Callback to receive the found entry
+ * @returns Updated HostsFile with entry removed
+ */
+function extractEntryByHostname(
+  hostsFile: HostsFile,
+  hostname: string,
+  onFound: (entry: Entry | null) => void
+): HostsFile {
+  let foundEntry: Entry | null = null;
+
+  const updatedGroups = hostsFile.groups.map(group => 
+    extractFromGroup(group, hostname, (entry) => {
+      if (entry) foundEntry = entry;
+    })
+  );
+
+  onFound(foundEntry);
+
+  return {
+    ...hostsFile,
+    groups: updatedGroups,
+  };
+}
+
+/**
+ * Recursively extract an entry from a group and its nested groups
+ * 
+ * @param group - The group to process
+ * @param hostname - Hostname to extract
+ * @param onFound - Callback to receive the found entry
+ * @returns Updated Group with entry removed
+ */
+function extractFromGroup(
+  group: Group,
+  hostname: string,
+  onFound: (entry: Entry | null) => void
+): Group {
+  // Find and extract the entry from this group
+  let extractedEntry: Entry | null = null;
+  const filteredEntries = group.entries.filter(entry => {
+    if (entry.hostname === hostname) {
+      extractedEntry = entry;
+      onFound(entry);
+      return false;
+    }
+    return true;
+  });
+
+  // Recursively process nested groups
+  const updatedNestedGroups = group.groups.map(nestedGroup =>
+    extractFromGroup(nestedGroup, hostname, onFound)
+  );
+
+  return {
+    ...group,
+    entries: filteredEntries,
+    groups: updatedNestedGroups,
+  };
+}
+
+/**
+ * Add an entry to a specific group by path
+ * 
+ * @param hostsFile - The hosts file structure
+ * @param groupPath - Path to the target group (e.g., "work/prod")
+ * @param entry - The entry to add
+ * @returns Updated HostsFile with entry added to target group
+ */
+function addEntryToGroup(
+  hostsFile: HostsFile,
+  groupPath: string,
+  entry: Entry
+): HostsFile {
+  const pathSegments = groupPath.split("/").filter(s => s.length > 0);
+  
+  const updatedGroups = hostsFile.groups.map(group => 
+    addToGroupRecursive(group, pathSegments, entry, 0)
+  );
+
+  return {
+    ...hostsFile,
+    groups: updatedGroups,
+  };
+}
+
+/**
+ * Recursively add an entry to a group at a specific path depth
+ * 
+ * @param group - The current group
+ * @param pathSegments - Array of path segments
+ * @param entry - The entry to add
+ * @param depth - Current depth in the path
+ * @returns Updated Group
+ */
+function addToGroupRecursive(
+  group: Group,
+  pathSegments: string[],
+  entry: Entry,
+  depth: number
+): Group {
+  // Check if this is the target group
+  if (depth < pathSegments.length && group.name === pathSegments[depth]) {
+    // If we're at the last segment, add the entry here
+    if (depth === pathSegments.length - 1) {
+      return {
+        ...group,
+        entries: [...group.entries, entry],
+      };
+    }
+    
+    // Otherwise, recurse into nested groups
+    const updatedNestedGroups = group.groups.map(nestedGroup =>
+      addToGroupRecursive(nestedGroup, pathSegments, entry, depth + 1)
+    );
+    
+    return {
+      ...group,
+      groups: updatedNestedGroups,
+    };
+  }
+  
+  // Not the target path, return unchanged
+  return group;
 }
