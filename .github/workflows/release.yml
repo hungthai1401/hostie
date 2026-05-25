@@ -19,16 +19,16 @@ jobs:
         include:
           - target: bun-darwin-arm64
             os: macos-latest
-            asset: hostie-darwin-arm64
+            asset: hostie-bun-darwin-arm64
           - target: bun-darwin-x64
             os: macos-latest
-            asset: hostie-darwin-x64
+            asset: hostie-bun-darwin-x64
           - target: bun-linux-x64
             os: ubuntu-latest
-            asset: hostie-linux-x64
+            asset: hostie-bun-linux-x64
           - target: bun-linux-arm64
             os: ubuntu-latest
-            asset: hostie-linux-arm64
+            asset: hostie-bun-linux-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -61,6 +61,10 @@ jobs:
             dist/${{ matrix.asset }}.sha256
           retention-days: 7
 
+  # Artifact naming convention (Phase 2+):
+  # - Bun (v1, doomed): hostie-bun-<os>-<arch> (prefixed to avoid collision during parallel-lane period)
+  # - Go (v2, future): hostie-<os>-<arch> (canonical name; no cutover rename needed at Phase 5)
+  # At Phase 5 cutover, Bun job + artifacts are deleted; Go artifacts remain as-is.
   go-build-release:
     name: Go Build ${{ matrix.goos }}/${{ matrix.goarch }}
     if: startsWith(github.ref, 'refs/tags/v')
@@ -92,7 +96,7 @@ jobs:
           cache: true
           cache-dependency-path: go/go.sum
 
-      - name: Build hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}
+      - name: Build hostie-${{ matrix.goos }}-${{ matrix.goarch }}
         working-directory: go
         env:
           CGO_ENABLED: "0"
@@ -104,18 +108,18 @@ jobs:
           # Strip leading "v" so a tag "v1.0.0" produces "hostie v1.0.0", not "hostie vv1.0.0".
           # Pass via env to avoid script injection from attacker-influenced ref names.
           VERSION="${REF_NAME#v}"
-          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o ../dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/hostie
+          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o ../dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/hostie
 
       - name: Compute checksum
-        run: shasum -a 256 dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }} > dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+        run: shasum -a 256 dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }} > dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: hostie-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
-            dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}
-            dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+            dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }}
+            dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
           retention-days: 7
   go-size-check:
     name: Verify Go binary size budget
@@ -126,7 +130,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           path: artifacts
-          pattern: hostie-go-*
+          pattern: hostie-*
           merge-multiple: false
       - name: Check sizes
         run: |
@@ -134,9 +138,9 @@ jobs:
           FAIL=0
           echo "| Platform | Size | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          for dir in artifacts/hostie-go-*; do
+          for dir in artifacts/hostie-*; do
             name=$(basename "$dir")
-            bins=("$dir"/hostie-go-*)
+            bins=("$dir"/hostie-*)
             if [ ${#bins[@]} -ne 1 ]; then
               echo "::error::expected 1 binary in $dir, got ${#bins[@]}"; FAIL=1; continue
             fi
