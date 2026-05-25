@@ -1,36 +1,36 @@
 /**
  * Apply mechanism for hostie
- * 
- * Implements idempotent application of ~/.hosts to /etc/hosts
- * Only writes if content has changed to avoid unnecessary I/O
+ *
+ * Implements idempotent application of ~/.hosts to /etc/hosts.
+ * Only writes if content has changed to avoid unnecessary I/O.
+ *
+ * This module composes:
+ *   - `core/render.ts:renderEntry`  — single-line rendering of an Entry
+ *   - `core/etchosts.ts:writeEtcHosts` — atomic write that preserves mode
+ *     + uid + gid across the rename (hosts-cli-379.64).
+ *
+ * It owns three pieces of behavior that the shared modules do not:
+ *   1. A *strict* `extractManagedBlock` that throws on malformed input
+ *      (multiple BEGINs, unbalanced markers, wrong order, etc.) so we
+ *      never silently append a duplicate block onto a half-written file
+ *      (hosts-cli-379.65). `core/etchosts.ts:extractManagedBlock` is the
+ *      lenient variant; callers that want fail-fast behavior use this one.
+ *   2. The on-disk block layout: BEGIN/<lines>/END with no blank-line
+ *      padding, and `# group: <path>` comments before each non-empty
+ *      group. This differs from `core/render.ts:renderHostsFile`, which
+ *      is used for the `apply --dry-run` preview (flattened, with blank
+ *      padding inside the markers).
+ *   3. The sudo re-exec path for EACCES on the atomic rename.
  */
 
-import { readFileSync, writeFileSync, statSync, chmodSync, chownSync } from "fs";
-import { mkdtempSync, renameSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { readFileSync } from "fs";
+import type { Entry, Group, HostsFile } from "../domain/types";
+import { renderEntry } from "./render";
+import { writeEtcHosts } from "./etchosts";
 
-// Type definitions matching design.md
-// These will be moved to domain/types.ts when that bead is implemented
-type Entry = {
-  id: string;
-  ip: string;
-  hostname: string;
-  aliases: string[];
-  enabled: boolean;
-  comment?: string;
-};
-
-type Group = {
-  name: string;
-  entries: Entry[];
-  groups: Group[];
-};
-
-export type HostsFile = {
-  version: 1;
-  groups: Group[];
-};
+// Re-export HostsFile so existing test imports
+// (`import { type HostsFile } from "../../src/core/apply"`) keep working.
+export type { HostsFile };
 
 export type ApplyResult = {
   changed: boolean;
@@ -42,88 +42,77 @@ const END_MARKER = "# END HOSTIE";
 const ETC_HOSTS_PATH = "/etc/hosts";
 
 /**
- * Re-execute the current process with sudo
- * 
- * This function is called when EACCES is detected during /etc/hosts write.
- * It re-execs the entire process with sudo, preserving all arguments and stdio.
- * 
+ * Re-execute the current process with sudo.
+ *
+ * Called when EACCES is detected during /etc/hosts write. Re-execs the
+ * entire process with sudo, preserving all arguments and stdio.
+ *
  * @throws Never returns - calls process.exit() with sudo's exit code
  */
 export async function reexecWithSudo(): Promise<never> {
   // Check if already running as root
   if (process.getuid && process.getuid() === 0) {
-    // Already root, cannot escalate further
     throw new Error("Cannot write /etc/hosts even as root");
   }
-  
+
   // Re-exec with sudo, passing through all original arguments
-  const result = Bun.spawn(['sudo', Bun.argv[0], ...Bun.argv.slice(1)], {
-    stdio: ['inherit', 'inherit', 'inherit']
+  const result = Bun.spawn(["sudo", Bun.argv[0], ...Bun.argv.slice(1)], {
+    stdio: ["inherit", "inherit", "inherit"],
   });
-  
+
   await result.exited;
   process.exit(result.exitCode ?? 1);
 }
 
 /**
- * Render a single entry to hosts file format
+ * Render a single group and its subgroups into the on-disk block layout
+ * used inside /etc/hosts: a `# group: <path>` header followed by each
+ * enabled entry, then recurse into subgroups with their `parent/child`
+ * paths. Disabled entries are skipped entirely (they are not commented
+ * out in the managed block).
  */
-function renderEntry(entry: Entry): string {
-  if (!entry.enabled) {
-    const line = `${entry.ip} ${entry.hostname}${entry.aliases.length > 0 ? " " + entry.aliases.join(" ") : ""}`;
-    return `# ${line}${entry.comment ? " # " + entry.comment : ""}`;
-  }
-  
-  const line = `${entry.ip} ${entry.hostname}${entry.aliases.length > 0 ? " " + entry.aliases.join(" ") : ""}`;
-  return entry.comment ? `${line} # ${entry.comment}` : line;
-}
-
-/**
- * Render a group and its entries recursively
- */
-function renderGroup(group: Group, path: string = ""): string[] {
+function renderGroupBlockLines(group: Group, path: string = ""): string[] {
   const lines: string[] = [];
   const groupPath = path ? `${path}/${group.name}` : group.name;
-  
-  if (group.entries.length > 0) {
+
+  // Only emit a group header when there is at least one enabled entry
+  // directly in this group. Empty groups contribute no lines.
+  const enabledEntries = group.entries.filter((e) => e.enabled);
+  if (enabledEntries.length > 0) {
     lines.push(`# group: ${groupPath}`);
-    for (const entry of group.entries) {
-      if (entry.enabled) {
-        lines.push(renderEntry(entry));
-      }
+    for (const entry of enabledEntries) {
+      lines.push(renderEntry(entry));
     }
   }
-  
-  // Recursively render subgroups
+
+  // Recurse into subgroups.
   for (const subgroup of group.groups) {
-    const subgroupLines = renderGroup(subgroup, groupPath);
+    const subgroupLines = renderGroupBlockLines(subgroup, groupPath);
     if (subgroupLines.length > 0) {
       lines.push(...subgroupLines);
     }
   }
-  
+
   return lines;
 }
 
 /**
- * Render the managed block content from a HostsFile
- * This is the content that goes between BEGIN/END markers
+ * Render the managed block content from a HostsFile (without BEGIN/END
+ * markers — those are added by buildNewContent).
  */
 function renderManagedBlock(hostsFile: HostsFile): string {
   const lines: string[] = [];
-  
   for (const group of hostsFile.groups) {
-    const groupLines = renderGroup(group);
+    const groupLines = renderGroupBlockLines(group);
     if (groupLines.length > 0) {
       lines.push(...groupLines);
     }
   }
-  
   return lines.join("\n");
 }
 
 /**
- * Extract the managed block from /etc/hosts content.
+ * Extract the managed block from /etc/hosts content (strict variant).
  *
  * Detects malformed marker layouts and throws so callers do NOT silently
  * append a duplicate block on top of a half-written file. Malformed cases:
@@ -131,6 +120,9 @@ function renderManagedBlock(hostsFile: HostsFile): string {
  *   - END marker present but no preceding BEGIN (manual edit damage)
  *   - Two or more BEGIN markers (duplicated apply or nested block)
  *   - END appears before BEGIN (order corruption)
+ *
+ * For the lenient variant that tolerates malformed input, see
+ * `core/etchosts.ts:extractManagedBlock`.
  *
  * Exported for direct unit testing.
  *
@@ -223,120 +215,88 @@ export function extractManagedBlock(content: string): {
 }
 
 /**
- * Build the new /etc/hosts content with the managed block
+ * Build the new /etc/hosts content with the managed block.
+ *
+ * Uses the strict extractor — malformed existing content throws here,
+ * before any write is attempted.
  */
 function buildNewContent(currentContent: string, newBlock: string): string {
   const extracted = extractManagedBlock(currentContent);
 
   if (!extracted.hasBlock) {
-    // First apply: append block
+    // First apply: append block.
     const trimmed = currentContent.trimEnd();
     return `${trimmed}\n\n${BEGIN_MARKER}\n${newBlock}\n${END_MARKER}\n`;
   }
 
-  // Replace existing block
+  // Replace existing block.
   return `${extracted.before}${BEGIN_MARKER}\n${newBlock}\n${END_MARKER}${extracted.after}`;
 }
 
 /**
- * Apply a HostsFile to /etc/hosts with idempotency check
- * 
- * Only writes if the content has changed to avoid unnecessary I/O
- * and preserve file modification times when nothing changes.
- * 
+ * Apply a HostsFile to /etc/hosts with idempotency check.
+ *
+ * Only writes if the content has changed, to avoid unnecessary I/O and
+ * preserve mtime when nothing changes.
+ *
  * @param hostsFile - The HostsFile to apply
  * @returns ApplyResult with changed flag and status message
  */
 export async function applyHostsFile(hostsFile: HostsFile): Promise<ApplyResult> {
+  let currentContent: string;
   try {
-    // Read current /etc/hosts
-    const currentContent = readFileSync(ETC_HOSTS_PATH, "utf-8");
-    
-    // Render new managed block from hostsFile
-    const newBlock = renderManagedBlock(hostsFile);
-    
-    // Build what the new content would be
-    const newContent = buildNewContent(currentContent, newBlock);
-    
-    // Compare: only write if different
-    if (newContent === currentContent) {
-      return {
-        changed: false,
-        message: "/etc/hosts is already up to date (no changes needed)",
-      };
-    }
-    
-    // Content differs - write atomically
-    try {
-      // Capture original ownership/mode so the atomic rename preserves them.
-      // /etc/hosts must remain 0644 root:wheel (macOS) / root:root (Linux);
-      // dropping these breaks system DNS lookups (see hosts-cli-379.64).
-      let originalMode = 0o644;
-      let originalUid: number | null = null;
-      let originalGid: number | null = null;
-      try {
-        const stats = statSync(ETC_HOSTS_PATH);
-        // Mask to permission bits only (drop file-type bits) so chmodSync
-        // receives a clean mode value.
-        originalMode = stats.mode & 0o7777;
-        originalUid = stats.uid;
-        originalGid = stats.gid;
-      } catch (statErr: any) {
-        // If /etc/hosts doesn't exist, fall back to 0644 with no chown.
-        if (statErr.code !== "ENOENT") throw statErr;
-      }
-
-      // Atomic write: write to temp file, apply perms+ownership, then rename.
-      const tempDir = mkdtempSync(join(tmpdir(), 'hostie-'));
-      const tempFile = join(tempDir, 'hosts');
-
-      writeFileSync(tempFile, newContent, 'utf-8');
-
-      // Preserve mode (0644) and uid/gid before the rename so the destination
-      // inherits the correct ownership atomically.
-      chmodSync(tempFile, originalMode);
-      if (originalUid !== null && originalGid !== null) {
-        try {
-          chownSync(tempFile, originalUid, originalGid);
-        } catch (chownErr: any) {
-          // chown may fail with EPERM when not running as root. The atomic
-          // rename can still proceed; the file simply keeps the caller's uid.
-          // We only swallow EPERM — everything else is fatal.
-          if (chownErr.code !== "EPERM") throw chownErr;
-        }
-      }
-
-      renameSync(tempFile, ETC_HOSTS_PATH);
-
-      return {
-        changed: true,
-        message: "/etc/hosts updated successfully",
-      };
-    } catch (writeErr: any) {
-      // Handle write-specific errors
-      if (writeErr.code === "EACCES") {
-        // Permission denied - re-exec with sudo
-        await reexecWithSudo();
-      }
-      throw writeErr;
-    }
-    
+    // We read synchronously (and bypass `readEtcHosts`) so the existing
+    // `spyOn(fs, "readFileSync")` test surface keeps working unchanged.
+    currentContent = readFileSync(ETC_HOSTS_PATH, "utf-8");
   } catch (err: any) {
-    // Handle errors gracefully
     if (err.code === "ENOENT") {
       return {
         changed: false,
         message: `/etc/hosts not found: ${err.message}`,
       };
     }
-    
     if (err.code === "EACCES") {
       return {
         changed: false,
         message: `Permission denied reading /etc/hosts (may need sudo): ${err.message}`,
       };
     }
-    
     throw err;
   }
+
+  // Render the managed block body (no markers — buildNewContent adds them).
+  const newBlock = renderManagedBlock(hostsFile);
+
+  // Compute the would-be /etc/hosts content. This call also runs the
+  // strict extractor — malformed existing content throws here, before
+  // any write is attempted (hosts-cli-379.65).
+  const newContent = buildNewContent(currentContent, newBlock);
+
+  // Idempotency: skip write when content is unchanged.
+  if (newContent === currentContent) {
+    return {
+      changed: false,
+      message: "/etc/hosts is already up to date (no changes needed)",
+    };
+  }
+
+  // Atomic write via the shared primitive. Preserves mode + uid + gid
+  // across the rename (hosts-cli-379.64).
+  try {
+    await writeEtcHosts(newContent);
+    return {
+      changed: true,
+      message: "/etc/hosts updated successfully",
+    };
+  } catch (writeErr: any) {
+    if (writeErr.code === "EACCES") {
+      // Permission denied on rename — re-exec with sudo.
+      await reexecWithSudo();
+    }
+    throw writeErr;
+  }
 }
+
+// Type alias retained for type-only consumers. (Entry is referenced
+// indirectly via renderEntry above; Group is referenced by the walker.)
+export type { Entry, Group };
