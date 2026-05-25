@@ -340,4 +340,91 @@ describe("App integration (TUI composition)", () => {
 
     unmount();
   });
+
+  test("'/' enters search mode and clears the query (hosts-cli-379.75, D19)", async () => {
+    const { stdin, unmount } = await mountApp();
+    useAppStore.setState({ searchQuery: "stale" });
+    await flush();
+
+    stdin.write("/");
+    await flush();
+
+    const state = useAppStore.getState();
+    expect(state.mode).toBe("search");
+    expect(state.searchQuery).toBe("");
+
+    unmount();
+  });
+
+  test("typed characters in search mode accumulate in searchQuery (hosts-cli-379.75, D19)", async () => {
+    const { stdin, unmount } = await mountApp();
+
+    stdin.write("/");
+    await flush();
+    stdin.write("a");
+    await flush();
+    stdin.write("l");
+    await flush();
+    stdin.write("p");
+    await flush();
+
+    expect(useAppStore.getState().searchQuery).toBe("alp");
+    expect(useAppStore.getState().mode).toBe("search");
+
+    unmount();
+  });
+
+  test("Esc in search mode clears query and returns to normal mode (hosts-cli-379.75, D19)", async () => {
+    const { stdin, unmount } = await mountApp();
+
+    stdin.write("/");
+    await flush();
+    stdin.write("a");
+    await flush();
+    expect(useAppStore.getState().searchQuery).toBe("a");
+
+    stdin.write("\x1B");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const state = useAppStore.getState();
+    expect(state.mode).toBe("normal");
+    expect(state.searchQuery).toBe("");
+
+    unmount();
+  });
+
+  test("Enter in search mode exits to normal mode preserving the query (hosts-cli-379.75, D19)", async () => {
+    const { stdin, unmount } = await mountApp();
+
+    stdin.write("/");
+    await flush();
+    stdin.write("a");
+    await flush();
+    stdin.write("l");
+    await flush();
+
+    stdin.write("\r");
+    await flush();
+
+    const state = useAppStore.getState();
+    expect(state.mode).toBe("normal");
+    expect(state.searchQuery).toBe("al");
+
+    unmount();
+  });
+
+  test("active searchQuery filters displayedEntries via useSearch (hosts-cli-379.75, D19)", async () => {
+    const { lastFrame, unmount } = await mountApp();
+
+    useAppStore.getState().setSearchQuery("alpha");
+    await flush();
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("alpha.work");
+    // beta.work and personal entries should be filtered out
+    expect(frame).not.toContain("beta.work");
+    expect(frame).not.toContain("home.local");
+
+    unmount();
+  });
 });

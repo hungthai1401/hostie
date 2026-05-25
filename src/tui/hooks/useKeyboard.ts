@@ -62,6 +62,7 @@ export function useKeyboard() {
     selectedGroupPath,
     mode,
     dirty,
+    searchQuery,
     selectEntry,
     selectGroup,
     toggleEntry,
@@ -72,6 +73,8 @@ export function useKeyboard() {
     markDirty,
     setStatusMessage,
     clearDirty,
+    setMode,
+    setSearchQuery,
   } = useAppStore();
 
   // Track current focus area (sidebar or main)
@@ -80,8 +83,38 @@ export function useKeyboard() {
   let currentFocus: FocusArea = selectedGroupPath.length > 0 ? "sidebar" : "main";
 
   useInput((input, key) => {
+    // Search-mode input handling (hosts-cli-379.75, D19)
+    if (mode === "search") {
+      if (key.escape) {
+        setSearchQuery("");
+        setMode("normal");
+        return;
+      }
+      if (key.return) {
+        // Exit search mode but preserve the query as an active filter
+        setMode("normal");
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setSearchQuery(searchQuery.slice(0, -1));
+        return;
+      }
+      // Append printable characters to the query
+      if (input && input.length === 1 && input >= " " && input !== "\u007f") {
+        setSearchQuery(searchQuery + input);
+      }
+      return;
+    }
+
     // Only handle navigation in normal mode
     if (mode !== "normal") {
+      return;
+    }
+
+    // Handle '/' to enter search mode (hosts-cli-379.75, D19)
+    if (input === "/") {
+      setSearchQuery("");
+      setMode("search");
       return;
     }
 

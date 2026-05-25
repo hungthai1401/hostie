@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import { initializeStore, useAppStore } from "./store";
 import { useKeyboard } from "./hooks/useKeyboard";
+import { useSearch } from "./hooks/useSearch";
 import { Layout } from "./components/Layout";
 import { GroupTree } from "./components/GroupTree";
 import { EntryList } from "./components/EntryList";
@@ -156,8 +157,11 @@ export function App() {
   const modal = useAppStore((s) => s.modal);
   const dirty = useAppStore((s) => s.dirty);
   const statusMessage = useAppStore((s) => s.statusMessage);
+  const searchQuery = useAppStore((s) => s.searchQuery);
   const selectEntry = useAppStore((s) => s.selectEntry);
   const selectGroup = useAppStore((s) => s.selectGroup);
+
+  const { results: searchResults, isSearching } = useSearch();
 
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
 
@@ -175,11 +179,13 @@ export function App() {
       ? findGroupByPath(hostsFile.groups, selectedGroupPath)
       : null;
 
-  const displayedEntries: Entry[] = selectedGroup
-    ? selectedGroup.entries
-    : collectAllEntries(hostsFile.groups);
+  const displayedEntries: Entry[] = isSearching
+    ? searchResults.map((r) => r.item)
+    : selectedGroup
+      ? selectedGroup.entries
+      : collectAllEntries(hostsFile.groups);
 
-  const helpHint = `? help • j/k nav • a add • e edit • g new-group • space toggle • enter apply • q quit${
+  const helpHint = `? help • j/k nav • / search • a add • e edit • g new-group • space toggle • enter apply • q quit${
     dirty ? " •" : ""
   }`;
 
@@ -225,6 +231,16 @@ export function App() {
 
           <Layout.StatusBar>
             <Box flexDirection="column">
+              {(mode === "search" || isSearching) && (
+                <Box paddingX={1}>
+                  <Text>
+                    {mode === "search" ? "/" : "filter: "}
+                    {searchQuery}
+                    {mode === "search" ? "█" : ""}
+                    {isSearching ? `  (${searchResults.length} match${searchResults.length === 1 ? "" : "es"})` : ""}
+                  </Text>
+                </Box>
+              )}
               <StatusBar mode={statusMode} helpHint={helpHint} />
               {statusMessage && (
                 <Box paddingX={1}>
