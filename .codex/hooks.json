@@ -1,0 +1,7 @@
+{
+  "SessionStart": [
+    {
+      "command": "node .codex/hooks/superpowers_session_start.mjs"
+    }
+  ]
+}
