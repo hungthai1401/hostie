@@ -179,7 +179,7 @@ export function App() {
     ? selectedGroup.entries
     : collectAllEntries(hostsFile.groups);
 
-  const helpHint = `? help • j/k nav • space toggle • enter apply • q quit${
+  const helpHint = `? help • j/k nav • a add • e edit • g new-group • space toggle • enter apply • q quit${
     dirty ? " •" : ""
   }`;
 

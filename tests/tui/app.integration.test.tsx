@@ -283,4 +283,61 @@ describe("App integration (TUI composition)", () => {
 
     unmount();
   });
+  test("'a' opens entry-creator modal (hosts-cli-379.74, D9)", async () => {
+    const { stdin, unmount } = await mountApp();
+    expect(useAppStore.getState().modal).toBeNull();
+
+    stdin.write("a");
+    await flush();
+
+    const state = useAppStore.getState();
+    expect(state.modal?.type).toBe("entry-creator");
+    expect(state.mode).toBe("modal");
+
+    unmount();
+  });
+
+  test("'e' on a selected entry opens entry-editor modal with that entry (hosts-cli-379.74, D9)", async () => {
+    const { stdin, unmount } = await mountApp();
+    useAppStore.getState().selectEntry("entry-work-1");
+    await flush();
+
+    stdin.write("e");
+    await flush();
+
+    const state = useAppStore.getState();
+    expect(state.modal?.type).toBe("entry-editor");
+    expect((state.modal?.data as any)?.entry?.id).toBe("entry-work-1");
+    expect((state.modal?.data as any)?.entry?.hostname).toBe("alpha.work");
+
+    unmount();
+  });
+
+  test("'e' with no selected entry does nothing (hosts-cli-379.74, D9)", async () => {
+    const { stdin, unmount } = await mountApp();
+    useAppStore.setState({ selectedEntryId: null });
+    await flush();
+
+    stdin.write("e");
+    await flush();
+
+    expect(useAppStore.getState().modal).toBeNull();
+
+    unmount();
+  });
+
+  test("'g' opens group-creator modal seeded with current group path (hosts-cli-379.74, D9)", async () => {
+    const { stdin, unmount } = await mountApp();
+    useAppStore.getState().selectGroup(["work"]);
+    await flush();
+
+    stdin.write("g");
+    await flush();
+
+    const state = useAppStore.getState();
+    expect(state.modal?.type).toBe("group-creator");
+    expect((state.modal?.data as any)?.parentPath).toEqual(["work"]);
+
+    unmount();
+  });
 });

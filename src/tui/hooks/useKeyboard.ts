@@ -269,6 +269,28 @@ export function useKeyboard() {
       return;
     }
 
+    // Handle 'a' for adding a new entry (hosts-cli-379.74, D9)
+    if (input === "a") {
+      openModal("entry-creator");
+      return;
+    }
+
+    // Handle 'e' for editing the selected entry (hosts-cli-379.74, D9)
+    if (input === "e" && selectedEntryId) {
+      const entries = flattenEntries(hostsFile.groups);
+      const entry = entries.find((x) => x.id === selectedEntryId);
+      if (entry) {
+        openModal("entry-editor", { entry });
+      }
+      return;
+    }
+
+    // Handle 'g' for creating a new group (hosts-cli-379.74, D9)
+    if (input === "g") {
+      openModal("group-creator", { parentPath: selectedGroupPath });
+      return;
+    }
+
     // Handle 'm' for moving entry to a different group
     if (input === "m" && selectedEntryId) {
       openModal("move-to-group", {
