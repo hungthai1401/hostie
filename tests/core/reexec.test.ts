@@ -162,10 +162,10 @@ describe("reexecWithSudo", () => {
     // Bun.argv[0]. In a `bun build --compile` binary, Bun.argv[0] is the
     // embedded virtual-FS path "/$bunfs/root/<name>", which sudo cannot exec.
     expect(spawnCaptures.length).toBe(1);
+    // Bun.argv[1] (the script/$bunfs path) is dropped — only user args forwarded.
     expect(spawnCaptures[0].cmd).toEqual([
       "sudo",
       expectedArgv0,
-      "/Users/me/hostie/dist/index.js",
       "apply",
       "--dry-run",
     ]);
@@ -298,7 +298,6 @@ describe("reexecWithSudo", () => {
     expect(spawnCaptures[0].cmd).toEqual([
       "sudo",
       expectedArgv0,
-      "/path/to/script.js",
       "add",
       "10.0.0.1",
       "api.local",
@@ -369,9 +368,6 @@ describe("applyHostsFile → EACCES → reexecWithSudo integration", () => {
     expect(spawnCaptures[0].cmd[0]).toBe("sudo");
     expect(spawnCaptures[0].cmd[1]).toBe(expectedArgv0);
     expect(spawnCaptures[0].cmd[1]).not.toMatch(/\$bunfs/);
-    expect(spawnCaptures[0].cmd.slice(2)).toEqual([
-      "/path/to/hostie",
-      "apply",
-    ]);
+    expect(spawnCaptures[0].cmd.slice(2)).toEqual(["apply"]);
   });
 });

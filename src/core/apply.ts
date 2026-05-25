@@ -69,7 +69,12 @@ export async function reexecWithSudo(): Promise<never> {
     argv0 = process.execPath;
   }
 
-  const result = Bun.spawn(["sudo", argv0, ...Bun.argv.slice(1)], {
+  // Bun.argv layout: [bun_exec, script_or_bunfs_path, ...userArgs]. We replace
+  // the first two with the resolved on-disk binary (which itself contains the
+  // embedded entry point) and forward only the user arguments. Using slice(1)
+  // would forward "/$bunfs/root/hostie" as the first user argument, which the
+  // CLI parser would then reject as an unknown command. (hosts-cli-379.72)
+  const result = Bun.spawn(["sudo", argv0, ...Bun.argv.slice(2)], {
     stdio: ["inherit", "inherit", "inherit"],
   });
 

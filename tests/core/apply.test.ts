@@ -396,6 +396,66 @@ describe("applyHostsFile — preserves mode + uid + gid", () => {
     }
   });
 
+  test("clamps other-write and group-write bits even if stat reports them (hosts-cli-379.73)", async () => {
+    // UAT 2026-05-25 found /etc/hosts = 0o100646 (-rw-r--rw-, world-writable).
+    // writeEtcHosts must NEVER preserve other-write or group-write on the
+    // single most security-sensitive file outside of /etc/passwd.
+    const readSpy = spyOn(fs, "readFileSync").mockReturnValue("127.0.0.1 localhost\n");
+    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(() => {});
+    const statSpy = spyOn(fs, "statSync").mockImplementation(() => ({
+      mode: 0o100646, // S_IFREG | -rw-r--rw-
+      uid: 0,
+      gid: 0,
+    } as any));
+    const chmodSpy = spyOn(fs, "chmodSync").mockImplementation(() => {});
+    const chownSpy = spyOn(fs, "chownSync").mockImplementation(() => {});
+    const renameSpy = spyOn(fs, "renameSync").mockImplementation(() => {});
+
+    try {
+      await applyHostsFile(hostsFileWithEntry);
+      const [, chmodMode] = chmodSpy.mock.calls[0];
+      // 0o646 & ~0o022 = 0o644 — other-write stripped.
+      expect(chmodMode).toBe(0o644);
+      expect((chmodMode! as number) & 0o002).toBe(0); // no other-write
+      expect((chmodMode! as number) & 0o020).toBe(0); // no group-write
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+      statSpy.mockRestore();
+      chmodSpy.mockRestore();
+      chownSpy.mockRestore();
+      renameSpy.mockRestore();
+    }
+  });
+
+  test("strips setuid/setgid/sticky bits (P3 finding U, hosts-cli-379.73)", async () => {
+    const readSpy = spyOn(fs, "readFileSync").mockReturnValue("127.0.0.1 localhost\n");
+    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(() => {});
+    const statSpy = spyOn(fs, "statSync").mockImplementation(() => ({
+      mode: 0o106755, // S_IFREG | setuid | setgid | rwxr-xr-x
+      uid: 0,
+      gid: 0,
+    } as any));
+    const chmodSpy = spyOn(fs, "chmodSync").mockImplementation(() => {});
+    const chownSpy = spyOn(fs, "chownSync").mockImplementation(() => {});
+    const renameSpy = spyOn(fs, "renameSync").mockImplementation(() => {});
+
+    try {
+      await applyHostsFile(hostsFileWithEntry);
+      const [, chmodMode] = chmodSpy.mock.calls[0];
+      // 0o6755 masked to 0o0777 = 0o755, then & ~0o022 = 0o755.
+      expect(chmodMode).toBe(0o755);
+      expect((chmodMode! as number) & 0o7000).toBe(0); // no setuid/setgid/sticky
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+      statSpy.mockRestore();
+      chmodSpy.mockRestore();
+      chownSpy.mockRestore();
+      renameSpy.mockRestore();
+    }
+  });
+
   test("tolerates EPERM on chown (non-root caller) and still completes rename", async () => {
     const readSpy = spyOn(fs, "readFileSync").mockReturnValue("127.0.0.1 localhost\n");
     const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(() => {});

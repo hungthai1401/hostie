@@ -145,9 +145,13 @@ export async function writeEtcHosts(content: string): Promise<void> {
   let originalGid: number | null = null;
   try {
     const stats = statSync(ETC_HOSTS_PATH);
-    // Mask to permission bits only (drop file-type bits) so chmodSync
-    // receives a clean mode value.
-    originalMode = stats.mode & 0o7777;
+    // Mask to permission bits only (drop file-type, setuid, setgid, sticky
+    // bits) AND clamp away group-write + other-write. /etc/hosts is read by
+    // every process on the system; allowing non-root writers turns it into a
+    // DNS-hijack primitive. We honor read bits as found (some distros run
+    // 0640 or 0600) but never preserve write bits beyond owner.
+    // (hosts-cli-379.73, generalizes P3 finding U.)
+    originalMode = (stats.mode & 0o0777) & ~0o022;
     originalUid = stats.uid;
     originalGid = stats.gid;
   } catch (statErr: any) {
