@@ -7,6 +7,7 @@ import { useInput } from "ink";
 import { useAppStore } from "../store";
 import type { Entry, Group } from "../../domain/types";
 import { writeHostsFile } from "../../core/file-io";
+import { applyHostsFile } from "../../core/apply";
 
 /**
  * Focus area in the TUI
@@ -66,6 +67,8 @@ export function useKeyboard() {
     openModal,
     closeModal,
     markDirty,
+    setStatusMessage,
+    clearDirty,
   } = useAppStore();
 
   // Track current focus area (sidebar or main)
@@ -203,6 +206,35 @@ export function useKeyboard() {
         },
         onCancel: () => {
           // Just close the modal
+          closeModal();
+        },
+      });
+      return;
+    }
+
+    // Handle Enter or Ctrl+S for applying changes to /etc/hosts
+    if (key.return || (key.ctrl && input === "s")) {
+      openModal("confirmation", {
+        message: "Apply changes to /etc/hosts?",
+        onConfirm: () => {
+          closeModal();
+          applyHostsFile(hostsFile)
+            .then((result) => {
+              if (result.changed) {
+                setStatusMessage(result.message, "success");
+                clearDirty();
+              } else {
+                setStatusMessage(result.message, "info");
+              }
+            })
+            .catch((err) => {
+              setStatusMessage(
+                `Apply failed: ${err?.message ?? String(err)}`,
+                "error"
+              );
+            });
+        },
+        onCancel: () => {
           closeModal();
         },
       });

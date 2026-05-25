@@ -49,6 +49,8 @@ export interface AppState {
   dirty: boolean;
   /** Current modal state (null if no modal open) */
   modal: ModalState | null;
+  /** Transient status message (e.g., apply result). null if none. */
+  statusMessage: { text: string; level: "info" | "success" | "error" } | null;
 
   // Actions
   /** Load hosts file data into state */
@@ -81,6 +83,13 @@ export interface AppState {
   openModal: (type: ModalType, data?: any) => void;
   /** Close the current modal */
   closeModal: () => void;
+  /** Set a transient status message */
+  setStatusMessage: (
+    text: string,
+    level?: "info" | "success" | "error"
+  ) => void;
+  /** Clear the status message */
+  clearStatusMessage: () => void;
 }
 
 /**
@@ -157,6 +166,7 @@ export const useAppStore = create<AppState>((set) => ({
   mode: "normal",
   dirty: false,
   modal: null,
+  statusMessage: null,
 
   // Actions
   loadHostsFile: (file) =>
@@ -288,6 +298,16 @@ export const useAppStore = create<AppState>((set) => ({
     set({
       modal: null,
       mode: "normal",
+    }),
+
+  setStatusMessage: (text, level = "info") =>
+    set({
+      statusMessage: { text, level },
+    }),
+
+  clearStatusMessage: () =>
+    set({
+      statusMessage: null,
     }),
 }));
 

@@ -434,4 +434,66 @@ describe("useKeyboard navigation logic", () => {
     expect(state.modal).toBe(null);
     expect(state.mode).toBe("normal");
   });
+
+  test("setStatusMessage / clearStatusMessage work", () => {
+    expect(useAppStore.getState().statusMessage).toBe(null);
+
+    useAppStore.getState().setStatusMessage("hello", "success");
+    expect(useAppStore.getState().statusMessage).toEqual({
+      text: "hello",
+      level: "success",
+    });
+
+    useAppStore.getState().clearStatusMessage();
+    expect(useAppStore.getState().statusMessage).toBe(null);
+  });
+
+  test("apply confirmation flow: confirm clears dirty and sets success message", () => {
+    useAppStore.setState({ dirty: true });
+
+    useAppStore.getState().openModal("confirmation", {
+      message: "Apply changes to /etc/hosts?",
+      onConfirm: () => {
+        useAppStore.getState().closeModal();
+        useAppStore.getState().setStatusMessage("ok", "success");
+        useAppStore.getState().clearDirty();
+      },
+      onCancel: () => {
+        useAppStore.getState().closeModal();
+      },
+    });
+
+    expect(useAppStore.getState().mode).toBe("modal");
+    expect(useAppStore.getState().modal?.data?.message).toBe(
+      "Apply changes to /etc/hosts?"
+    );
+
+    useAppStore.getState().modal?.data?.onConfirm();
+
+    const state = useAppStore.getState();
+    expect(state.modal).toBe(null);
+    expect(state.mode).toBe("normal");
+    expect(state.dirty).toBe(false);
+    expect(state.statusMessage?.level).toBe("success");
+  });
+
+  test("apply confirmation flow: cancel closes modal without clearing dirty", () => {
+    useAppStore.setState({ dirty: true });
+
+    useAppStore.getState().openModal("confirmation", {
+      message: "Apply changes to /etc/hosts?",
+      onConfirm: () => {
+        useAppStore.getState().closeModal();
+      },
+      onCancel: () => {
+        useAppStore.getState().closeModal();
+      },
+    });
+
+    useAppStore.getState().modal?.data?.onCancel();
+
+    const state = useAppStore.getState();
+    expect(state.modal).toBe(null);
+    expect(state.dirty).toBe(true);
+  });
 });
