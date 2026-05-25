@@ -4,6 +4,7 @@
  * Handles j/k navigation, Tab focus switching, Space for toggling, and updates store state.
  */
 import { useInput } from "ink";
+import { useApp } from "ink";
 import { useAppStore } from "../store";
 import type { Entry, Group } from "../../domain/types";
 import { writeHostsFile } from "../../core/file-io";
@@ -54,11 +55,13 @@ function flattenGroupPaths(groups: Group[], parentPath: string[] = []): string[]
  * - Updates store with selected entry/group
  */
 export function useKeyboard() {
+  const { exit } = useApp();
   const {
     hostsFile,
     selectedEntryId,
     selectedGroupPath,
     mode,
+    dirty,
     selectEntry,
     selectGroup,
     toggleEntry,
@@ -244,6 +247,25 @@ export function useKeyboard() {
     // Handle '?' for opening the help modal
     if (input === "?") {
       openModal("help");
+      return;
+    }
+
+    // Handle 'q' for quitting the TUI
+    if (input === "q") {
+      if (dirty) {
+        openModal("confirmation", {
+          message: "Unsaved changes — quit anyway?",
+          onConfirm: () => {
+            closeModal();
+            exit();
+          },
+          onCancel: () => {
+            closeModal();
+          },
+        });
+      } else {
+        exit();
+      }
       return;
     }
 

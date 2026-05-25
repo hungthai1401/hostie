@@ -305,16 +305,58 @@ describe("useKeyboard navigation logic", () => {
   });
 
   test("quit action (q key) should be handled in normal mode", () => {
-    // This test verifies that the quit logic can be invoked
-    // The actual exit is handled by Ink's useApp().exit() which we can't test here
-    // We just verify that mode is normal (prerequisite for quit to work)
+    // Prerequisite check: q key is only handled in normal mode
     expect(useAppStore.getState().mode).toBe("normal");
-    
-    // In the actual implementation, pressing 'q' in normal mode will call exit()
-    // This test documents the expected behavior
   });
 
-  test("moveEntry moves entry from source group to target group", () => {
+  test("quit with clean state: dirty=false means no confirmation modal needed", () => {
+    useAppStore.setState({ dirty: false });
+    expect(useAppStore.getState().dirty).toBe(false);
+    // In the hook, exit() is called directly when dirty is false.
+    // No modal is opened.
+    expect(useAppStore.getState().modal).toBe(null);
+  });
+
+  test("quit with dirty state: opens 'Unsaved changes — quit anyway?' confirmation", () => {
+    useAppStore.setState({ dirty: true });
+
+    // Simulate the dirty quit flow (as the 'q' handler does)
+    useAppStore.getState().openModal("confirmation", {
+      message: "Unsaved changes — quit anyway?",
+      onConfirm: () => {
+        useAppStore.getState().closeModal();
+        // In real usage, exit() is called here
+      },
+      onCancel: () => {
+        useAppStore.getState().closeModal();
+      },
+    });
+
+    const state = useAppStore.getState();
+    expect(state.mode).toBe("modal");
+    expect(state.modal?.type).toBe("confirmation");
+    expect(state.modal?.data?.message).toBe("Unsaved changes — quit anyway?");
+  });
+
+  test("quit with dirty state: cancel keeps modal closed and dirty flag preserved", () => {
+    useAppStore.setState({ dirty: true });
+
+    useAppStore.getState().openModal("confirmation", {
+      message: "Unsaved changes — quit anyway?",
+      onConfirm: () => {
+        useAppStore.getState().closeModal();
+      },
+      onCancel: () => {
+        useAppStore.getState().closeModal();
+      },
+    });
+
+    useAppStore.getState().modal?.data?.onCancel();
+
+    const state = useAppStore.getState();
+    expect(state.modal).toBe(null);
+    expect(state.dirty).toBe(true);
+  });  test("moveEntry moves entry from source group to target group", () => {
     const hostsFile = {
       version: 1 as const,
       groups: [
