@@ -2,26 +2,35 @@
 - **Skill:** swarming
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** 2 (Core port) — wave-1 dispatched
+- **Phase:** 2 (Core port) — wave-3 dispatched
 
 ## Phase 2 Spike Closures (inline by orchestrator)
 - hosts-cli-go-mig-p2-atomic-spike-jdb: CLOSED (FINDINGS.md complete; deliverable IS the spike).
 - hosts-cli-go-mig-p2-golden-pin-spike-dbo: CLOSED (FINDINGS.md + .sha256 sidecars committed).
 
-## Phase 2 Wave 1 Dispatch
-- 4 parallel workers, zero file-scope overlap, zero inter-bead deps.
-- BlackOtter → S1A go-mig-p2-domain-types-2sw (go/internal/domain/types.go + test)
-- VioletHeron → S1B go-mig-p2-domain-id-a5r (go/internal/domain/id.go + test)
-- SilverFinch → S1C go-mig-p2-domain-validators-rhk (go/internal/domain/validators.go + test; 60+ cases parity)
-- CopperFox → S6B go-mig-p2-clipboard-audit-fn0 (audit-only: docs/go-migration/dep-audit.md)
+## Phase 2 Wave 1 Results (Story 1 domain + S6B audit)
+- BlackOtter → S1A domain-types-2sw: DONE (commit fb0b89f)
+- VioletHeron → S1B domain-id-a5r: DONE (commit 121d8a0)
+- SilverFinch → S1C domain-validators-rhk: DONE (commit c168355, 84 subtests)
+- CopperFox → S6B clipboard-audit-fn0: DONE (commit deab425, TUI-gated verdict)
+
+## Phase 2 Wave 2 Results (S2A yaml + S3 render + S4A marker)
+- GoldenWren → S2A yaml-marshal-9ey: DONE (commit b8165d9, single YAML seam)
+- RustOwl → S3 render-0fg: DONE (commit 58c16ff, 28 tests, no-blank-padding)
+- JadeStag → S4A etchosts-marker-9o1: DONE (commit 72e2c57, 49 subtests)
+- S4B etchosts-marker-table-sbj: CLOSED inline (JadeStag's 49 >= v1 malformed coverage)
+
+## Phase 2 Wave 3 Dispatch (S2B roundtrip + S5B atomic + S6A fileio)
+- PineKite → S2B yaml-roundtrip-z64 (go/test/fixtures/hosts/ + roundtrip_test.go; Pivot Signal #1 watch)
+- NightFalcon → S5B atomic-impl-o1d (go/internal/core/etchosts/atomic.go; 5 properties from spike)
+- MossViper → S6A fileio-p06 (go/internal/core/fileio/; call-time HOME resolution)
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
 |------|--------|--------------|----------------|
-| BlackOtter | dispatched | hosts-cli-go-mig-p2-domain-types-2sw | go/internal/domain/types.go, go/internal/domain/types_test.go |
-| VioletHeron | dispatched | hosts-cli-go-mig-p2-domain-id-a5r | go/internal/domain/id.go, go/internal/domain/id_test.go |
-| SilverFinch | dispatched | hosts-cli-go-mig-p2-domain-validators-rhk | go/internal/domain/validators.go, go/internal/domain/validators_test.go |
-| CopperFox | dispatched | hosts-cli-go-mig-p2-clipboard-audit-fn0 | docs/go-migration/dep-audit.md |
+| PineKite | dispatched | hosts-cli-go-mig-p2-yaml-roundtrip-z64 | go/test/fixtures/hosts/, go/internal/core/yaml/roundtrip_test.go |
+| NightFalcon | dispatched | hosts-cli-go-mig-p2-atomic-impl-o1d | go/internal/core/etchosts/atomic.go, atomic_test.go |
+| MossViper | dispatched | hosts-cli-go-mig-p2-fileio-p06 | go/internal/core/fileio/fileio.go, fileio_test.go |
 
 ## Phase 1 Bootstrap Results
 - 6/6 beads closed. Commits: eb7c93e, 52f6c79, 25c5382, eed60e6, 04d1421, 908d5fc on feature/go-migration.
