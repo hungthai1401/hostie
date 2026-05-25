@@ -1,8 +1,16 @@
 ## Current
-- **Skill:** compounding
+- **Skill:** writing-plans
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** complete (Phase 1 Bootstrap — handoff to finishing-a-development-branch)
+- **Phase:** 2 (Core port) — planning complete, handing off to validating
+
+## Phase 2 Planning Output
+- `docs/go-migration/phase-2-contract.md` — entry state, 15 exit-state clauses, demo story, unlocks, 7 pivot signals.
+- `docs/go-migration/phase-2-story-map.md` — 8 stories, 19 beads (15 net-new + 4 Phase-1 carryover P2), full coverage check.
+- 15 net-new beads created (slug `go-mig-p2-*`), all block the epic. Dep graph: 0 cycles.
+- 4 carryover beads: ci-job-sprawl-n2y, artifact-prefix-ck9, test-contract-ej6, stat-portability-rci (folded into Story 8).
+- HIGH-risk items identified for validating spikes: S5 atomic write (S5A spike bead created), S7 golden pin (S7A spike bead created).
+- One soft-ordering not enforceable as hard dep: S7C should land after S8A (ci-job-sprawl) but a hard edge would form a cycle since S8A already blocks the epic — enforce via swarming dispatch order.
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
