@@ -111,3 +111,42 @@ jobs:
       - name: Staticcheck
         continue-on-error: true
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.5.1 ./...
+
+  go-golden:
+    name: Go Golden Parity (${{ matrix.os }})
+    if: github.ref == 'refs/heads/feature/go-migration' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5.6.0
+        with:
+          go-version-file: go/go.mod
+          cache: true
+
+      - name: Cache v1 binaries
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
+        with:
+          path: go/test/golden/.cache
+          key: golden-${{ runner.os }}-${{ hashFiles('docs/go-migration/golden-pin.md') }}
+
+      - name: Run golden harness
+        run: go test -tags golden ./test/golden -v
+
+      - name: Upload divergence artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: golden-divergence-${{ matrix.os }}
+          path: go/test/golden/.cache
+          if-no-files-found: warn
+          retention-days: 7
