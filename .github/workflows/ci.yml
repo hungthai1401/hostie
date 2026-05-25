@@ -81,3 +81,99 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 14
+
+  go-build:
+    name: Go Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+  go-test:
+    name: Go Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+  go-vet:
+    name: Go Vet (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache: true
+
+      - name: Vet
+        run: go vet ./...
+
+  go-staticcheck:
+    name: Go Staticcheck (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache: true
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
+
+      - name: Staticcheck
+        continue-on-error: true
+        run: staticcheck ./...
