@@ -1,8 +1,8 @@
 ## Current
-- **Skill:** reviewing
+- **Skill:** compounding
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** handoff-to-compounding (Phase 1 Bootstrap)
+- **Phase:** complete (Phase 1 Bootstrap — handoff to finishing-a-development-branch)
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
