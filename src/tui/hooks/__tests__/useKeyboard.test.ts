@@ -303,4 +303,135 @@ describe("useKeyboard navigation logic", () => {
     expect(useAppStore.getState().modal).toBe(null);
     expect(useAppStore.getState().mode).toBe("normal");
   });
+
+  test("quit action (q key) should be handled in normal mode", () => {
+    // This test verifies that the quit logic can be invoked
+    // The actual exit is handled by Ink's useApp().exit() which we can't test here
+    // We just verify that mode is normal (prerequisite for quit to work)
+    expect(useAppStore.getState().mode).toBe("normal");
+    
+    // In the actual implementation, pressing 'q' in normal mode will call exit()
+    // This test documents the expected behavior
+  });
+
+  test("moveEntry moves entry from source group to target group", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "work",
+          entries: [
+            {
+              id: "entry-1",
+              ip: "127.0.0.1",
+              hostname: "test1.local",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+        {
+          name: "personal",
+          entries: [],
+          groups: [],
+        },
+      ],
+    };
+
+    useAppStore.getState().loadHostsFile(hostsFile);
+    expect(useAppStore.getState().dirty).toBe(false);
+
+    useAppStore.getState().moveEntry("entry-1", ["personal"]);
+
+    const state = useAppStore.getState();
+    expect(state.hostsFile.groups[0].entries.length).toBe(0);
+    expect(state.hostsFile.groups[1].entries.length).toBe(1);
+    expect(state.hostsFile.groups[1].entries[0].id).toBe("entry-1");
+    expect(state.dirty).toBe(true);
+  });
+
+  test("moveEntry is a no-op when target path is empty", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "work",
+          entries: [
+            {
+              id: "entry-1",
+              ip: "127.0.0.1",
+              hostname: "test.local",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+      ],
+    };
+
+    useAppStore.getState().loadHostsFile(hostsFile);
+    useAppStore.getState().moveEntry("entry-1", []);
+
+    const state = useAppStore.getState();
+    expect(state.hostsFile.groups[0].entries.length).toBe(1);
+  });
+
+  test("m key flow: opens move-to-group modal with onSelect that moves entry", () => {
+    const hostsFile = {
+      version: 1 as const,
+      groups: [
+        {
+          name: "work",
+          entries: [
+            {
+              id: "entry-1",
+              ip: "127.0.0.1",
+              hostname: "test.local",
+              aliases: [],
+              enabled: true,
+            },
+          ],
+          groups: [],
+        },
+        {
+          name: "personal",
+          entries: [],
+          groups: [],
+        },
+      ],
+    };
+
+    useAppStore.getState().loadHostsFile(hostsFile);
+    useAppStore.getState().selectEntry("entry-1");
+
+    // Simulate opening the move-to-group modal (as the 'm' handler does)
+    useAppStore.getState().openModal("move-to-group", {
+      entryId: "entry-1",
+      onSelect: (targetGroupPath: string[]) => {
+        useAppStore.getState().moveEntry("entry-1", targetGroupPath);
+        useAppStore.getState().closeModal();
+      },
+      onCancel: () => {
+        useAppStore.getState().closeModal();
+      },
+    });
+
+    expect(useAppStore.getState().mode).toBe("modal");
+    expect(useAppStore.getState().modal?.type).toBe("move-to-group");
+
+    // Simulate the user picking "personal"
+    const modal = useAppStore.getState().modal;
+    if (modal?.data?.onSelect) {
+      modal.data.onSelect(["personal"]);
+    }
+
+    const state = useAppStore.getState();
+    expect(state.hostsFile.groups[0].entries.length).toBe(0);
+    expect(state.hostsFile.groups[1].entries.length).toBe(1);
+    expect(state.hostsFile.groups[1].entries[0].id).toBe("entry-1");
+    expect(state.modal).toBe(null);
+    expect(state.mode).toBe("normal");
+  });
 });

@@ -62,6 +62,7 @@ export function useKeyboard() {
     selectGroup,
     toggleEntry,
     deleteEntry,
+    moveEntry,
     openModal,
     closeModal,
     markDirty,
@@ -202,6 +203,27 @@ export function useKeyboard() {
         },
         onCancel: () => {
           // Just close the modal
+          closeModal();
+        },
+      });
+      return;
+    }
+
+    // Handle 'm' for moving entry to a different group
+    if (input === "m" && selectedEntryId) {
+      openModal("move-to-group", {
+        entryId: selectedEntryId,
+        onSelect: (targetGroupPath: string[]) => {
+          moveEntry(selectedEntryId, targetGroupPath);
+
+          // Persist changes to ~/.hosts
+          writeHostsFile("~/.hosts", useAppStore.getState().hostsFile).catch((err) => {
+            console.error("Failed to write hosts file:", err);
+          });
+
+          closeModal();
+        },
+        onCancel: () => {
           closeModal();
         },
       });

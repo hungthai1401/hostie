@@ -15,7 +15,13 @@ export type Mode = "normal" | "search" | "edit" | "modal";
 /**
  * Modal types
  */
-export type ModalType = "group-creator" | "entry-creator" | "entry-editor" | "confirmation";
+export type ModalType =
+  | "group-creator"
+  | "entry-creator"
+  | "entry-editor"
+  | "confirmation"
+  | "move-to-group"
+  | "help";
 
 /**
  * Modal state
@@ -67,6 +73,8 @@ export interface AppState {
   deleteEntry: (id: string) => void;
   /** Toggle entry enabled state */
   toggleEntry: (id: string) => void;
+  /** Move an entry to a different group by path */
+  moveEntry: (id: string, targetGroupPath: string[]) => void;
   /** Add a new group */
   addGroup: (name: string, parentPath?: string[]) => void;
   /** Open a modal */
@@ -226,6 +234,40 @@ export const useAppStore = create<AppState>((set) => ({
       },
       dirty: true,
     })),
+
+  moveEntry: (id, targetGroupPath) =>
+    set((state) => {
+      // First, find and remove the entry from its current group
+      let removedEntry: Entry | null = null;
+      const groupsWithoutEntry = findAndUpdateEntry(
+        state.hostsFile.groups,
+        id,
+        (entry) => {
+          removedEntry = entry;
+          return null;
+        }
+      );
+
+      if (!removedEntry || targetGroupPath.length === 0) {
+        // Entry not found or no target — no change
+        return state;
+      }
+
+      // Then add it to the target group
+      const newGroups = addEntryToGroup(
+        groupsWithoutEntry,
+        targetGroupPath,
+        removedEntry
+      );
+
+      return {
+        hostsFile: {
+          ...state.hostsFile,
+          groups: newGroups,
+        },
+        dirty: true,
+      };
+    }),
 
   addGroup: (name, parentPath) =>
     set((state) => ({
