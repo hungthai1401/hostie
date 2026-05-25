@@ -30,12 +30,26 @@ interface StatusBarProps {
 }
 
 /**
+ * Wraps raw text children in <Text> so callers can pass either strings
+ * or already-rendered <Box>/<Text> nodes. Mixed children are wrapped
+ * collectively when at least one is a string.
+ */
+function wrapTextChildren(children: React.ReactNode): React.ReactNode {
+  const arr = React.Children.toArray(children);
+  const hasString = arr.some((c) => typeof c === "string" || typeof c === "number");
+  if (hasString) {
+    return <Text>{children}</Text>;
+  }
+  return children;
+}
+
+/**
  * Sidebar component - 30% width, displays group tree
  */
 function Sidebar({ children }: SidebarProps) {
   return (
     <Box width="30%" flexDirection="column" borderStyle="single" borderRight>
-      <Text>{children}</Text>
+      {wrapTextChildren(children)}
     </Box>
   );
 }
@@ -46,7 +60,7 @@ function Sidebar({ children }: SidebarProps) {
 function Main({ children }: MainProps) {
   return (
     <Box width="70%" flexDirection="column" paddingLeft={1}>
-      <Text>{children}</Text>
+      {wrapTextChildren(children)}
     </Box>
   );
 }
@@ -57,7 +71,7 @@ function Main({ children }: MainProps) {
 function StatusBar({ children }: StatusBarProps) {
   return (
     <Box width="100%" borderStyle="single" borderTop paddingX={1}>
-      <Text>{children}</Text>
+      {wrapTextChildren(children)}
     </Box>
   );
 }
