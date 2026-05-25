@@ -123,47 +123,93 @@ function renderManagedBlock(hostsFile: HostsFile): string {
 }
 
 /**
- * Extract the managed block from /etc/hosts content
+ * Extract the managed block from /etc/hosts content.
+ *
+ * Detects malformed marker layouts and throws so callers do NOT silently
+ * append a duplicate block on top of a half-written file. Malformed cases:
+ *   - BEGIN marker present but no matching END (truncated write)
+ *   - END marker present but no preceding BEGIN (manual edit damage)
+ *   - Two or more BEGIN markers (duplicated apply or nested block)
+ *   - END appears before BEGIN (order corruption)
+ *
+ * Exported for direct unit testing.
+ *
+ * @throws Error with a human-actionable message suggesting either manual
+ *         repair of /etc/hosts or rerunning the command with --force.
  */
-function extractManagedBlock(content: string): {
+export function extractManagedBlock(content: string): {
   before: string;
   block: string | null;
   after: string;
   hasBlock: boolean;
 } {
   const lines = content.split("\n");
-  let beginIdx = -1;
-  let endIdx = -1;
 
-  // Find first BEGIN marker
+  // Collect every marker occurrence so we can diagnose malformed input.
+  const beginIndices: number[] = [];
+  const endIndices: number[] = [];
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === BEGIN_MARKER) {
-      beginIdx = i;
-      break;
-    }
+    const trimmed = lines[i].trim();
+    if (trimmed === BEGIN_MARKER) beginIndices.push(i);
+    else if (trimmed === END_MARKER) endIndices.push(i);
   }
 
-  // Find first END marker after BEGIN
-  if (beginIdx !== -1) {
-    for (let i = beginIdx + 1; i < lines.length; i++) {
-      if (lines[i].trim() === END_MARKER) {
-        endIdx = i;
-        break;
-      }
-    }
+  // No markers at all — first apply, treat as no block.
+  if (beginIndices.length === 0 && endIndices.length === 0) {
+    return { before: content, block: null, after: "", hasBlock: false };
   }
 
-  // No block found
-  if (beginIdx === -1 || endIdx === -1) {
-    return {
-      before: content,
-      block: null,
-      after: "",
-      hasBlock: false,
-    };
+  const repairHint =
+    "Repair /etc/hosts manually (remove the stray markers) or rerun with --force to overwrite the managed region.";
+
+  // Multiple BEGINs (includes nested BEGIN/BEGIN/END/END layouts).
+  if (beginIndices.length > 1) {
+    throw new Error(
+      `Malformed /etc/hosts: found multiple "${BEGIN_MARKER}" markers (lines ${beginIndices
+        .map((i) => i + 1)
+        .join(", ")}). The managed block must appear exactly once. ${repairHint}`,
+    );
   }
 
-  // Extract parts
+  // Multiple ENDs.
+  if (endIndices.length > 1) {
+    throw new Error(
+      `Malformed /etc/hosts: found multiple "${END_MARKER}" markers (lines ${endIndices
+        .map((i) => i + 1)
+        .join(", ")}). The managed block must appear exactly once. ${repairHint}`,
+    );
+  }
+
+  // BEGIN without matching END.
+  if (beginIndices.length === 1 && endIndices.length === 0) {
+    throw new Error(
+      `Malformed /etc/hosts: unbalanced markers — found "${BEGIN_MARKER}" at line ${
+        beginIndices[0] + 1
+      } but no matching "${END_MARKER}". The file may have been truncated mid-write. ${repairHint}`,
+    );
+  }
+
+  // END without matching BEGIN.
+  if (endIndices.length === 1 && beginIndices.length === 0) {
+    throw new Error(
+      `Malformed /etc/hosts: unbalanced markers — found "${END_MARKER}" at line ${
+        endIndices[0] + 1
+      } but no preceding "${BEGIN_MARKER}". ${repairHint}`,
+    );
+  }
+
+  // Exactly one of each — verify ordering.
+  const beginIdx = beginIndices[0];
+  const endIdx = endIndices[0];
+  if (endIdx < beginIdx) {
+    throw new Error(
+      `Malformed /etc/hosts: unbalanced markers — "${END_MARKER}" at line ${
+        endIdx + 1
+      } appears before "${BEGIN_MARKER}" at line ${beginIdx + 1} (wrong order). ${repairHint}`,
+    );
+  }
+
+  // Well-formed: extract the surrounding context.
   const before = lines.slice(0, beginIdx).join("\n");
   const block = lines.slice(beginIdx + 1, endIdx).join("\n");
   const after = lines.slice(endIdx + 1).join("\n");
