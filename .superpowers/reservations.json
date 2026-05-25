@@ -50,26 +50,6 @@
     "reserved_at": "2026-05-25T02:24:13.262Z"
   },
   {
-    "agent": "GildedPond",
-    "bead": "hosts-cli-379.56",
-    "paths": [
-      "tests/core/render.test.ts"
-    ],
-    "ttl": 3600,
-    "expires_at": "2026-05-25T03:24:19.818Z",
-    "reserved_at": "2026-05-25T02:24:19.820Z"
-  },
-  {
-    "agent": "KelpCove",
-    "bead": "hosts-cli-379.60",
-    "paths": [
-      "tests/tui/MANUAL_CHECKLIST.md"
-    ],
-    "ttl": 3600,
-    "expires_at": "2026-05-25T03:24:22.624Z",
-    "reserved_at": "2026-05-25T02:24:22.627Z"
-  },
-  {
     "agent": "CoralMist",
     "bead": "hosts-cli-379.52",
     "paths": [
