@@ -1,8 +1,8 @@
 ## Current
-- **Skill:** brainstorming
+- **Skill:** writing-plans
 - **Feature:** go-migration
 - **Epic:** —
-- **Phase:** gate-1-approved
+- **Phase:** decomposition-complete (handoff to validating)
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
