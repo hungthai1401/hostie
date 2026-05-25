@@ -60,16 +60,6 @@
     "reserved_at": "2026-05-25T02:24:23.923Z"
   },
   {
-    "agent": "EmberSky",
-    "bead": "hosts-cli-379.54",
-    "paths": [
-      "tests/domain/*"
-    ],
-    "ttl": 3600,
-    "expires_at": "2026-05-25T03:24:31.519Z",
-    "reserved_at": "2026-05-25T02:24:31.520Z"
-  },
-  {
     "agent": "MorningStar",
     "bead": "hosts-cli-379.44",
     "paths": [
