@@ -1,26 +1,27 @@
 ## Current
-- **Skill:** validating
+- **Skill:** swarming
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** 2 (Core port) — gate-2
+- **Phase:** 2 (Core port) — wave-1 dispatched
 
-## Phase 2 Planning Output
-- `docs/go-migration/phase-2-contract.md` — entry state, 15 exit-state clauses, demo story, unlocks, 7 pivot signals.
-- `docs/go-migration/phase-2-story-map.md` — 8 stories, 19 beads (15 net-new + 4 Phase-1 carryover P2), full coverage check.
-- 15 net-new beads created (slug `go-mig-p2-*`), all block the epic. Dep graph: 0 cycles.
-- 4 carryover beads: ci-job-sprawl-n2y, artifact-prefix-ck9, test-contract-ej6, stat-portability-rci (folded into Story 8).
-- HIGH-risk items identified for validating spikes: S5 atomic write (S5A spike bead created), S7 golden pin (S7A spike bead created).
-- One soft-ordering not enforceable as hard dep: S7C should land after S8A (ci-job-sprawl) but a hard edge would form a cycle since S8A already blocks the epic — enforce via swarming dispatch order.
+## Phase 2 Spike Closures (inline by orchestrator)
+- hosts-cli-go-mig-p2-atomic-spike-jdb: CLOSED (FINDINGS.md complete; deliverable IS the spike).
+- hosts-cli-go-mig-p2-golden-pin-spike-dbo: CLOSED (FINDINGS.md + .sha256 sidecars committed).
+
+## Phase 2 Wave 1 Dispatch
+- 4 parallel workers, zero file-scope overlap, zero inter-bead deps.
+- BlackOtter → S1A go-mig-p2-domain-types-2sw (go/internal/domain/types.go + test)
+- VioletHeron → S1B go-mig-p2-domain-id-a5r (go/internal/domain/id.go + test)
+- SilverFinch → S1C go-mig-p2-domain-validators-rhk (go/internal/domain/validators.go + test; 60+ cases parity)
+- CopperFox → S6B go-mig-p2-clipboard-audit-fn0 (audit-only: docs/go-migration/dep-audit.md)
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
 |------|--------|--------------|----------------|
-| BlueLake | done | hosts-cli-go-mig-p1-gomod-hs4 | — |
-| IndigoFox | done | hosts-cli-go-mig-p1-main-oy5 | — |
-| CrimsonHawk | done | hosts-cli-go-mig-p1-ci-of1 | — |
-| AmberWolf | done | hosts-cli-go-mig-p1-release-g4v | — |
-| TealRaven | done | hosts-cli-go-mig-p1-sizecheck-aqy | — |
-| GoldenLynx | done | hosts-cli-go-mig-p1-budget-doc-bpj | — |
+| BlackOtter | dispatched | hosts-cli-go-mig-p2-domain-types-2sw | go/internal/domain/types.go, go/internal/domain/types_test.go |
+| VioletHeron | dispatched | hosts-cli-go-mig-p2-domain-id-a5r | go/internal/domain/id.go, go/internal/domain/id_test.go |
+| SilverFinch | dispatched | hosts-cli-go-mig-p2-domain-validators-rhk | go/internal/domain/validators.go, go/internal/domain/validators_test.go |
+| CopperFox | dispatched | hosts-cli-go-mig-p2-clipboard-audit-fn0 | docs/go-migration/dep-audit.md |
 
 ## Phase 1 Bootstrap Results
 - 6/6 beads closed. Commits: eb7c93e, 52f6c79, 25c5382, eed60e6, 04d1421, 908d5fc on feature/go-migration.
