@@ -81,9 +81,9 @@ export function useSearch() {
           { name: "entry.ip", weight: 1 },
           { name: "groupPathString", weight: 0.5 }, // Group path is least important
         ],
-        threshold: 0.4, // Allow some fuzziness (0 = exact, 1 = match anything)
+        threshold: 0.3, // Tighter fuzziness — avoids spurious single-char matches
         includeScore: true,
-        minMatchCharLength: 1,
+        minMatchCharLength: 2,
         ignoreLocation: true, // Don't care where in the string the match is
       }),
     [searchableEntries]
