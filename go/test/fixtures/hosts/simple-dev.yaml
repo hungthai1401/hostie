@@ -1,0 +1,10 @@
+version: 1
+groups:
+  - name: dev
+    entries:
+      - id: 01HZXYZ123
+        ip: 127.0.0.1
+        hostname: localhost.dev
+        aliases: []
+        enabled: true
+    groups: []

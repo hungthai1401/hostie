@@ -29,12 +29,13 @@ func sampleHostsFile() *domain.HostsFile {
 			{
 				Name:    "ipv6",
 				Entries: []domain.Entry{
-					{
-						ID:       "01HV0000000000000000000002",
-						IP:       "::1",
-						Hostname: "ipv6.local",
-						Enabled:  false,
-					},
+				{
+					ID:       "01HV0000000000000000000002",
+					IP:       "::1",
+					Hostname: "ipv6.local",
+					Aliases:  []string{},
+					Enabled:  false,
+				},
 				},
 			},
 		},

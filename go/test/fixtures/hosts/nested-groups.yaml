@@ -1,0 +1,13 @@
+version: 1
+groups:
+  - name: work
+    entries: []
+    groups:
+      - name: prod
+        entries:
+          - id: 01HZXYZ456
+            ip: 10.0.0.1
+            hostname: api.prod
+            aliases: ["api"]
+            enabled: true
+        groups: []

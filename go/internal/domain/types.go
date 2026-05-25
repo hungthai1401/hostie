@@ -15,7 +15,7 @@ type Entry struct {
 	// Hostname is the primary hostname; RFC 952/1123 compliant.
 	Hostname string `yaml:"hostname"`
 	// Aliases are additional hostnames on the same line.
-	Aliases []string `yaml:"aliases,omitempty"`
+	Aliases []string `yaml:"aliases"`
 	// Enabled controls whether this entry is active. When false the rendered
 	// line is `#`-commented out.
 	Enabled bool `yaml:"enabled"`

@@ -31,12 +31,13 @@ func TestTypesRoundTrip(t *testing.T) {
 			{
 				Name: "staging",
 				Entries: []Entry{
-					{
-						ID:       "01KSEFY41NVS9JANTX8D555C2M",
-						IP:       "10.0.0.2",
-						Hostname: "lonely.local",
-						Enabled:  false,
-					},
+				{
+					ID:       "01KSEFY41NVS9JANTX8D555C2M",
+					IP:       "10.0.0.2",
+					Hostname: "lonely.local",
+					Aliases:  []string{},
+					Enabled:  false,
+				},
 				},
 			},
 		},
@@ -76,7 +77,7 @@ func TestTypesOmitemptyDropsZeroValues(t *testing.T) {
 	}
 	out := string(data)
 
-	for _, banned := range []string{"description:", "aliases:", "comment:"} {
+	for _, banned := range []string{"description:", "comment:"} {
 		if strings.Contains(out, banned) {
 			t.Errorf("expected %q to be omitted from YAML, got:\n%s", banned, out)
 		}

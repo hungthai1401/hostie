@@ -1,0 +1,11 @@
+version: 1
+groups:
+  - name: test
+    entries:
+      - id: 01HZXYZ789
+        ip: 192.168.1.1
+        hostname: test.local
+        aliases: ["test", "testing"]
+        enabled: false
+        comment: "Disabled for testing"
+    groups: []
