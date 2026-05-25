@@ -1,8 +1,8 @@
 ## Current
-- **Skill:** writing-plans
+- **Skill:** validating
 - **Feature:** go-migration
-- **Epic:** —
-- **Phase:** decomposition-complete (handoff to validating)
+- **Epic:** hosts-cli-go-migration-epic-l54
+- **Phase:** gate-2-approved (Phase 1 Bootstrap) → swarming next
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
