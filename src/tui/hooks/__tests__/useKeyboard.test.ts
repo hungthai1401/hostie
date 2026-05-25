@@ -496,4 +496,21 @@ describe("useKeyboard navigation logic", () => {
     expect(state.modal).toBe(null);
     expect(state.dirty).toBe(true);
   });
+
+  test("help modal: openModal('help') sets modal type and entering modal mode", () => {
+    useAppStore.getState().openModal("help");
+    const state = useAppStore.getState();
+    expect(state.modal?.type).toBe("help");
+    expect(state.mode).toBe("modal");
+  });
+
+  test("help modal: closeModal returns to normal mode", () => {
+    useAppStore.getState().openModal("help");
+    expect(useAppStore.getState().mode).toBe("modal");
+
+    useAppStore.getState().closeModal();
+    const state = useAppStore.getState();
+    expect(state.modal).toBe(null);
+    expect(state.mode).toBe("normal");
+  });
 });

@@ -241,6 +241,12 @@ export function useKeyboard() {
       return;
     }
 
+    // Handle '?' for opening the help modal
+    if (input === "?") {
+      openModal("help");
+      return;
+    }
+
     // Handle 'm' for moving entry to a different group
     if (input === "m" && selectedEntryId) {
       openModal("move-to-group", {
