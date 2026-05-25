@@ -385,7 +385,7 @@ describe("applyHostsFile — preserves mode + uid + gid", () => {
       const [, chmodMode] = chmodSpy.mock.calls[0];
       // Must be 0o644, NOT 0o100644.
       expect(chmodMode).toBe(0o644);
-      expect(chmodMode! & 0o170000).toBe(0); // no file-type bits leaked
+      expect((chmodMode as number) & 0o170000).toBe(0); // no file-type bits leaked
     } finally {
       readSpy.mockRestore();
       writeSpy.mockRestore();

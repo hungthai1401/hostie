@@ -53,7 +53,8 @@ describe("MoveToGroupModal", () => {
     );
 
     stdin.write("\x1B"); // Escape key
-    await new Promise((resolve) => setImmediate(resolve));
+    // Ink debounces lone ESC briefly to disambiguate it from a CSI escape sequence.
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(onCancel).toHaveBeenCalled();
   });
 
