@@ -1,286 +1,275 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+/**
+ * Tests for applyHostsFile - uses spyOn to avoid touching real /etc/hosts.
+ *
+ * NOTE: We do NOT use mock.module() here — it is process-global in Bun and
+ * leaks across test files, breaking the entire suite. spyOn is scoped and
+ * automatically restored by Bun between tests.
+ */
+
+import { describe, test, expect, spyOn, beforeEach, afterEach } from "bun:test";
+import * as fs from "fs";
 import { applyHostsFile, type HostsFile } from "../apply";
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from "fs";
 
-const TEST_HOSTS_FILE = "/tmp/hostie-test-hosts";
+const BEGIN_MARKER = "# BEGIN HOSTIE";
+const END_MARKER = "# END HOSTIE";
 
-// Mock /etc/hosts by overriding the path in tests
-// For now, we'll use a test file path
+type FsState = {
+  initial: string;
+  written: string | null;
+  writeCount: number;
+};
+
+let state: FsState;
+const spies: Array<{ mockRestore: () => void }> = [];
+
+beforeEach(() => {
+  state = {
+    initial: "127.0.0.1 localhost\n",
+    written: null,
+    writeCount: 0,
+  };
+
+  spies.push(
+    spyOn(fs, "readFileSync").mockImplementation(((path: any, _opts: any) => {
+      if (typeof path === "string" && path === "/etc/hosts") {
+        return state.initial;
+      }
+      if (typeof path === "string" && state.written && path.includes("hostie-")) {
+        return state.written;
+      }
+      return "";
+    }) as any)
+  );
+
+  spies.push(
+    spyOn(fs, "writeFileSync").mockImplementation(((_path: any, data: any) => {
+      state.written = String(data);
+      state.writeCount++;
+    }) as any)
+  );
+
+  spies.push(
+    spyOn(fs, "renameSync").mockImplementation(((_src: any, _dst: any) => {
+      if (state.written !== null) {
+        state.initial = state.written;
+      }
+    }) as any)
+  );
+
+  spies.push(
+    spyOn(fs, "mkdtempSync").mockImplementation((() => "/tmp/hostie-fake") as any)
+  );
+});
+
+afterEach(() => {
+  while (spies.length) {
+    spies.pop()!.mockRestore();
+  }
+});
+
+function makeFile(groups: HostsFile["groups"]): HostsFile {
+  return { version: 1, groups };
+}
 
 describe("applyHostsFile", () => {
-  beforeEach(() => {
-    // Clean up any existing test file
-    if (existsSync(TEST_HOSTS_FILE)) {
-      unlinkSync(TEST_HOSTS_FILE);
-    }
-  });
-
-  afterEach(() => {
-    // Clean up test file
-    if (existsSync(TEST_HOSTS_FILE)) {
-      unlinkSync(TEST_HOSTS_FILE);
-    }
-  });
-
-  test("skips write if content unchanged (idempotency)", async () => {
-    // Create a HostsFile with one entry
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [
+  test("first apply: inserts managed block into existing /etc/hosts", async () => {
+    const result = await applyHostsFile(
+      makeFile([
         {
-          name: "test",
+          name: "work",
+          entries: [
+            { id: "1", ip: "10.0.0.1", hostname: "jira.work", aliases: [], enabled: true },
+          ],
+          groups: [],
+        },
+      ])
+    );
+
+    expect(result.changed).toBe(true);
+    expect(state.writeCount).toBe(1);
+    expect(state.written).toContain(BEGIN_MARKER);
+    expect(state.written).toContain(END_MARKER);
+    expect(state.written).toContain("10.0.0.1 jira.work");
+    expect(state.written).toContain("127.0.0.1 localhost");
+  });
+
+  test("idempotency: no write when content unchanged", async () => {
+    // Pre-populate /etc/hosts with the exact block apply would render.
+    state.initial =
+      "127.0.0.1 localhost\n\n" +
+      BEGIN_MARKER +
+      "\n" +
+      "# group: work\n10.0.0.1 jira.work\n" +
+      END_MARKER;
+
+    const result = await applyHostsFile(
+      makeFile([
+        {
+          name: "work",
+          entries: [
+            { id: "1", ip: "10.0.0.1", hostname: "jira.work", aliases: [], enabled: true },
+          ],
+          groups: [],
+        },
+      ])
+    );
+
+    expect(result.changed).toBe(false);
+    expect(state.writeCount).toBe(0);
+    expect(result.message).toContain("up to date");
+  });
+
+  test("change detection: replaces existing block when content differs", async () => {
+    state.initial =
+      "127.0.0.1 localhost\n\n" +
+      BEGIN_MARKER +
+      "\n# group: old\n1.1.1.1 old.host\n" +
+      END_MARKER +
+      "\n";
+
+    const result = await applyHostsFile(
+      makeFile([
+        {
+          name: "new",
+          entries: [
+            { id: "1", ip: "2.2.2.2", hostname: "new.host", aliases: [], enabled: true },
+          ],
+          groups: [],
+        },
+      ])
+    );
+
+    expect(result.changed).toBe(true);
+    expect(state.written).toContain("2.2.2.2 new.host");
+    expect(state.written).not.toContain("1.1.1.1 old.host");
+    expect(state.written).toContain("127.0.0.1 localhost");
+  });
+
+  test("skips disabled entries", async () => {
+    const result = await applyHostsFile(
+      makeFile([
+        {
+          name: "g",
+          entries: [
+            { id: "1", ip: "1.1.1.1", hostname: "on.host", aliases: [], enabled: true },
+            { id: "2", ip: "2.2.2.2", hostname: "off.host", aliases: [], enabled: false },
+          ],
+          groups: [],
+        },
+      ])
+    );
+
+    expect(result.changed).toBe(true);
+    expect(state.written).toContain("1.1.1.1 on.host");
+    expect(state.written).not.toContain("2.2.2.2 off.host");
+  });
+
+  test("renders aliases", async () => {
+    await applyHostsFile(
+      makeFile([
+        {
+          name: "g",
           entries: [
             {
-              id: "01J5ABC123",
-              ip: "192.168.1.10",
-              hostname: "test.local",
-              aliases: [],
+              id: "1",
+              ip: "10.0.0.5",
+              hostname: "srv.local",
+              aliases: ["a1.local", "a2.local"],
               enabled: true,
             },
           ],
           groups: [],
         },
-      ],
-    };
+      ])
+    );
 
-    // For this test, we need to mock the file read
-    // Since we can't easily mock /etc/hosts, we'll test the logic
-    // by checking the return value
-    
-    const result = await applyHostsFile(hostsFile);
-    
-    // Should indicate it would change (since /etc/hosts likely doesn't have our block)
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
-    expect(typeof result.changed).toBe("boolean");
-    expect(typeof result.message).toBe("string");
+    expect(state.written).toContain("10.0.0.5 srv.local a1.local a2.local");
   });
 
-  test("returns accurate status message for unchanged content", async () => {
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [],
-    };
-
-    const result = await applyHostsFile(hostsFile);
-    
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
-    expect(result.message).toContain("hosts");
-  });
-
-  test("handles first-time application (no existing block)", async () => {
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [
+  test("renders comments", async () => {
+    await applyHostsFile(
+      makeFile([
         {
-          name: "work",
+          name: "g",
           entries: [
             {
-              id: "01J5XYZ789",
-              ip: "10.0.1.5",
-              hostname: "jira.work",
+              id: "1",
+              ip: "10.0.0.5",
+              hostname: "srv.local",
               aliases: [],
               enabled: true,
+              comment: "prod box",
             },
           ],
           groups: [],
         },
-      ],
-    };
+      ])
+    );
 
-    const result = await applyHostsFile(hostsFile);
-    
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
+    expect(state.written).toContain("10.0.0.5 srv.local # prod box");
   });
 
-  test("handles nested groups correctly", async () => {
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [
+  test("handles nested groups with path prefixes", async () => {
+    await applyHostsFile(
+      makeFile([
         {
           name: "work",
           entries: [
-            {
-              id: "01J5ABC001",
-              ip: "10.0.1.5",
-              hostname: "jira.work",
-              aliases: [],
-              enabled: true,
-            },
+            { id: "1", ip: "10.0.0.1", hostname: "jira.work", aliases: [], enabled: true },
           ],
           groups: [
             {
               name: "prod",
               entries: [
-                {
-                  id: "01J5ABC002",
-                  ip: "10.0.2.10",
-                  hostname: "db.prod.work",
-                  aliases: [],
-                  enabled: true,
-                },
+                { id: "2", ip: "10.0.0.2", hostname: "db.prod", aliases: [], enabled: true },
               ],
               groups: [],
             },
           ],
         },
-      ],
-    };
+      ])
+    );
 
-    const result = await applyHostsFile(hostsFile);
-    
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
+    expect(state.written).toContain("# group: work");
+    expect(state.written).toContain("# group: work/prod");
+    expect(state.written).toContain("10.0.0.2 db.prod");
   });
 
-  test("skips disabled entries", async () => {
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [
-        {
-          name: "test",
-          entries: [
-            {
-              id: "01J5ABC003",
-              ip: "192.168.1.10",
-              hostname: "enabled.local",
-              aliases: [],
-              enabled: true,
-            },
-            {
-              id: "01J5ABC004",
-              ip: "192.168.1.11",
-              hostname: "disabled.local",
-              aliases: [],
-              enabled: false,
-            },
-          ],
-          groups: [],
-        },
-      ],
-    };
+  test("empty groups produce no group header", async () => {
+    // Starting from a clean /etc/hosts (no managed block) with empty groups
+    // means newBlock is "" — buildNewContent still appends BEGIN/END markers
+    // around an empty body, which differs from the original. That's a "change".
+    const result = await applyHostsFile(
+      makeFile([{ name: "empty", entries: [], groups: [] }])
+    );
 
-    const result = await applyHostsFile(hostsFile);
-    
-    // Should process without error
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
+    expect(result.changed).toBe(true);
+    expect(state.written).not.toContain("# group: empty");
+    expect(state.written).toContain(BEGIN_MARKER);
+    expect(state.written).toContain(END_MARKER);
   });
 
-  test("handles entries with aliases", async () => {
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [
-        {
-          name: "test",
-          entries: [
-            {
-              id: "01J5ABC005",
-              ip: "192.168.1.10",
-              hostname: "server.local",
-              aliases: ["alias1.local", "alias2.local"],
-              enabled: true,
-            },
-          ],
-          groups: [],
-        },
-      ],
-    };
+  test("ENOENT on /etc/hosts returns graceful failure", async () => {
+    spyOn(fs, "readFileSync").mockImplementation((() => {
+      const err: any = new Error("not found");
+      err.code = "ENOENT";
+      throw err;
+    }) as any);
 
-    const result = await applyHostsFile(hostsFile);
-    
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
+    const result = await applyHostsFile(makeFile([]));
+    expect(result.changed).toBe(false);
+    expect(result.message).toContain("not found");
   });
 
-  test("handles entries with comments", async () => {
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [
-        {
-          name: "test",
-          entries: [
-            {
-              id: "01J5ABC006",
-              ip: "192.168.1.10",
-              hostname: "server.local",
-              aliases: [],
-              enabled: true,
-              comment: "Production server",
-            },
-          ],
-          groups: [],
-        },
-      ],
-    };
+  test("EACCES on read returns graceful failure (no sudo prompt)", async () => {
+    spyOn(fs, "readFileSync").mockImplementation((() => {
+      const err: any = new Error("permission denied");
+      err.code = "EACCES";
+      throw err;
+    }) as any);
 
-    const result = await applyHostsFile(hostsFile);
-    
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
-  });
-
-  test("handles empty groups", async () => {
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [
-        {
-          name: "empty",
-          entries: [],
-          groups: [],
-        },
-      ],
-    };
-
-    const result = await applyHostsFile(hostsFile);
-    
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
-  });
-
-  test("handles permission errors gracefully", async () => {
-    // This test would need to mock file system access
-    // For now, we just verify the function signature works
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [],
-    };
-
-    const result = await applyHostsFile(hostsFile);
-    
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
-  });
-
-  test("detects EACCES and prepares for sudo re-exec", async () => {
-    // Test that EACCES errors are properly detected
-    // The actual re-exec happens at the CLI layer, but apply.ts should
-    // throw the error with code EACCES so the CLI can handle it
-    const hostsFile: HostsFile = {
-      version: 1,
-      groups: [
-        {
-          name: "test",
-          entries: [
-            {
-              id: "01J5ABC007",
-              ip: "192.168.1.10",
-              hostname: "test.local",
-              aliases: [],
-              enabled: true,
-            },
-          ],
-          groups: [],
-        },
-      ],
-    };
-
-    // This test verifies the error handling structure is in place
-    // Actual permission testing would require mocking fs operations
-    const result = await applyHostsFile(hostsFile);
-    expect(result).toHaveProperty("changed");
-    expect(result).toHaveProperty("message");
+    const result = await applyHostsFile(makeFile([]));
+    expect(result.changed).toBe(false);
+    expect(result.message).toContain("Permission denied");
   });
 });
