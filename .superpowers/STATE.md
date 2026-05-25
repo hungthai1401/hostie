@@ -1,13 +1,18 @@
 ## Current
-- **Skill:** validating
+- **Skill:** swarming
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** gate-2-approved (Phase 1 Bootstrap) → swarming next
+- **Phase:** active (Phase 1 Bootstrap)
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
 |------|--------|--------------|----------------|
-| (none) | — | — | — |
+| BlueLake | done | hosts-cli-go-mig-p1-gomod-hs4 | — |
+| IndigoFox | done | hosts-cli-go-mig-p1-main-oy5 | — |
+| CrimsonHawk | done | hosts-cli-go-mig-p1-ci-of1 | — |
+| AmberWolf | done | hosts-cli-go-mig-p1-release-g4v | — |
+| TealRaven | done | hosts-cli-go-mig-p1-sizecheck-aqy | — |
+| GoldenLynx | active | hosts-cli-go-mig-p1-budget-doc-bpj | docs/go-migration/size-budget.md, docs/go-migration/approach.md |
 
 ## Progress
 - Phase 1: 61/61 beads closed.
