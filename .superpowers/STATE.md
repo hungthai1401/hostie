@@ -2,7 +2,7 @@
 - **Skill:** swarming
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** active (Phase 1 Bootstrap)
+- **Phase:** swarm-complete (Phase 1 Bootstrap) — ready for reviewing
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
@@ -12,7 +12,13 @@
 | CrimsonHawk | done | hosts-cli-go-mig-p1-ci-of1 | — |
 | AmberWolf | done | hosts-cli-go-mig-p1-release-g4v | — |
 | TealRaven | done | hosts-cli-go-mig-p1-sizecheck-aqy | — |
-| GoldenLynx | active | hosts-cli-go-mig-p1-budget-doc-bpj | docs/go-migration/size-budget.md, docs/go-migration/approach.md |
+| GoldenLynx | done | hosts-cli-go-mig-p1-budget-doc-bpj | — |
+
+## Phase 1 Bootstrap Results
+- 6/6 beads closed. Commits: eb7c93e, 52f6c79, 25c5382, eed60e6, 04d1421, 908d5fc on feature/go-migration.
+- Local smoke: `go build ./...` + `go test ./...` + `go vet ./...` all green.
+- CI run #26390304200: go-build-release ✓ (4 platforms), go-size-check ✓ — sizes 2.50–2.57 MB / 18 MB ceiling. Pivot signal dormant; 15.4 MB headroom.
+- Exit-state clauses 1–6: all satisfied (go.mod pinned deps + main stub + Go CI jobs + size-check job + v1 lanes untouched + size-budget.md recorded).
 
 ## Progress
 - Phase 1: 61/61 beads closed.
