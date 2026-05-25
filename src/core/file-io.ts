@@ -39,8 +39,9 @@ export async function readHostsFile(filepath: string = "~/.hosts"): Promise<Host
   // Check if file exists
   if (!existsSync(expandedPath)) {
     // Create default file
-    await writeHostsFile(expandedPath, DEFAULT_HOSTS_FILE);
-    return DEFAULT_HOSTS_FILE;
+    const fresh = structuredClone(DEFAULT_HOSTS_FILE);
+    await writeHostsFile(expandedPath, fresh);
+    return fresh;
   }
   
   // Read and parse YAML
