@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: ["**"]
+    tags: ["v*"]
 
 permissions:
   contents: write
@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.target }}
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -111,8 +112,47 @@ jobs:
             dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}
             dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
           retention-days: 7
+  go-size-check:
+    name: Verify Go binary size budget
+    needs: go-build-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: hostie-go-*
+          merge-multiple: false
+      - name: Check sizes
+        run: |
+          set -e
+          FAIL=0
+          echo "| Platform | Size | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for dir in artifacts/hostie-go-*; do
+            name=$(basename "$dir")
+            bin=$(find "$dir" -type f ! -name '*.sha256' | head -1)
+            if [ -z "$bin" ]; then
+              echo "::error::no binary found in $dir"; FAIL=1; continue
+            fi
+            size=$(stat -c%s "$bin")
+            mb=$(awk "BEGIN {printf \"%.2f\", $size/1024/1024}")
+            if [ "$size" -gt $((18*1024*1024)) ]; then
+              echo "::error::$name = ${mb} MB > 18 MB hard ceiling"
+              echo "| $name | ${mb} MB | ❌ over 18 MB (FAIL) |" >> "$GITHUB_STEP_SUMMARY"
+              FAIL=1
+            elif [ "$size" -gt $((10*1024*1024)) ]; then
+              echo "::warning::$name = ${mb} MB > 10 MB aspirational target"
+              echo "| $name | ${mb} MB | ⚠️ over 10 MB (aspirational miss) |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "$name = ${mb} MB OK"
+              echo "| $name | ${mb} MB | ✅ under 10 MB |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          exit $FAIL
+
   release:
     name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     steps:
