@@ -31,10 +31,10 @@ jobs:
             asset: hostie-linux-arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2.2.0
         with:
           bun-version: latest
 
@@ -53,7 +53,7 @@ jobs:
           shasum -a 256 ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: ${{ matrix.asset }}
           path: |
@@ -63,6 +63,7 @@ jobs:
 
   go-build-release:
     name: Go Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -82,10 +83,10 @@ jobs:
             runner: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5.6.0
         with:
           go-version-file: go/go.mod
           cache: true
@@ -97,15 +98,19 @@ jobs:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           mkdir -p ../dist
-          go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o ../dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/hostie
+          # Strip leading "v" so a tag "v1.0.0" produces "hostie v1.0.0", not "hostie vv1.0.0".
+          # Pass via env to avoid script injection from attacker-influenced ref names.
+          VERSION="${REF_NAME#v}"
+          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o ../dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/hostie
 
       - name: Compute checksum
         run: shasum -a 256 dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }} > dist/hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: hostie-go-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
@@ -114,10 +119,11 @@ jobs:
           retention-days: 7
   go-size-check:
     name: Verify Go binary size budget
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: go-build-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           path: artifacts
           pattern: hostie-go-*
@@ -153,14 +159,14 @@ jobs:
   release:
     name: Create GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, go-build-release, go-size-check]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           path: artifacts
 
@@ -171,7 +177,7 @@ jobs:
           ls -lh release/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}

@@ -1,8 +1,8 @@
 ## Current
-- **Skill:** swarming
+- **Skill:** reviewing
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** swarm-complete (Phase 1 Bootstrap) — ready for reviewing
+- **Phase:** handoff-to-compounding (Phase 1 Bootstrap)
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
@@ -19,6 +19,14 @@
 - Local smoke: `go build ./...` + `go test ./...` + `go vet ./...` all green.
 - CI run #26390304200: go-build-release ✓ (4 platforms), go-size-check ✓ — sizes 2.50–2.57 MB / 18 MB ceiling. Pivot signal dormant; 15.4 MB headroom.
 - Exit-state clauses 1–6: all satisfied (go.mod pinned deps + main stub + Go CI jobs + size-check job + v1 lanes untouched + size-budget.md recorded).
+
+## Phase 1 Bootstrap Review Results
+- Reviewing Phase 1 (5 specialists): 0 P1 / 8 P2 / 10 P3 distinct findings.
+- Reviewing Phase 2 (3-level artifact verification): 6/6 exit-state clauses L1+L2+L3 pass; no new findings.
+- UAT (Phase 3): D2 / D3+D4+D8 / D6 / D7 (with caveat tracked) / D10 — all PASS.
+- GATE 3: APPROVED with inline-fix for top 4 P2 beads.
+- Inline-fix loop: 4/4 P2 beads closed (tag-injection-qb9, release-coupling-47t, cobra-version-on5, action-pinning-9mi). Remaining 4 P2 (ci-job-sprawl, artifact-prefix, test-contract, stat-portability) deferred as Phase-2-prep work. 10 P3 carried via external-ref.
+- Compounding candidates from learnings-synthesizer: 3 net-new patterns to promote to docs/learnings/critical-patterns.md.
 
 ## Progress
 - Phase 1: 61/61 beads closed.

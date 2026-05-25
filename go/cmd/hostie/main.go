@@ -28,21 +28,17 @@ var (
 )
 
 func newRootCmd() *cobra.Command {
-	var showVersion bool
 	cmd := &cobra.Command{
 		Use:           "hostie",
 		Short:         "hostie — hosts file manager",
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if showVersion {
-				fmt.Fprintf(cmd.OutOrStdout(), "hostie v%s\n", version)
-				return nil
-			}
-			return cmd.Help()
-		},
 	}
-	cmd.Flags().BoolVar(&showVersion, "version", false, "print version and exit")
+	// Match the prior output shape: "hostie v<version>\n".
+	// Tag refs already strip leading "v" in the release workflow, so a tag
+	// like "v1.0.0" yields version="1.0.0" → "hostie v1.0.0".
+	cmd.SetVersionTemplate("hostie v{{.Version}}\n")
 	return cmd
 }
 

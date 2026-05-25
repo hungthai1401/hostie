@@ -7,3 +7,9 @@ dist/
 .spikes/**/*.sbom.json
 .spikes/**/gum_*/
 
+# Local Go workspace leakage (GOPATH-style caches and stray builds)
+/bin/
+/pkg/
+go/hostie
+go/dist/
+
