@@ -15,4 +15,5 @@ dist/
 /pkg/
 go/hostie
 go/dist/
+go/test/golden/.cache/
 
