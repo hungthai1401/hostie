@@ -1,8 +1,8 @@
 ## Current
-- **Skill:** compounding
-- **Feature:** hostie
-- **Epic:** hosts-cli-379
-- **Phase:** complete
+- **Skill:** brainstorming
+- **Feature:** go-migration
+- **Epic:** —
+- **Phase:** gate-1-approved
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
