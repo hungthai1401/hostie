@@ -2,7 +2,7 @@
 - **Skill:** swarming
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** 2 (Core port) — wave-3 dispatched
+- **Phase:** 2 (Core port) — complete, handoff to reviewing
 
 ## Phase 2 Spike Closures (inline by orchestrator)
 - hosts-cli-go-mig-p2-atomic-spike-jdb: CLOSED (FINDINGS.md complete; deliverable IS the spike).
@@ -20,17 +20,51 @@
 - JadeStag → S4A etchosts-marker-9o1: DONE (commit 72e2c57, 49 subtests)
 - S4B etchosts-marker-table-sbj: CLOSED inline (JadeStag's 49 >= v1 malformed coverage)
 
-## Phase 2 Wave 3 Dispatch (S2B roundtrip + S5B atomic + S6A fileio)
-- PineKite → S2B yaml-roundtrip-z64 (go/test/fixtures/hosts/ + roundtrip_test.go; Pivot Signal #1 watch)
-- NightFalcon → S5B atomic-impl-o1d (go/internal/core/etchosts/atomic.go; 5 properties from spike)
-- MossViper → S6A fileio-p06 (go/internal/core/fileio/; call-time HOME resolution)
+## Phase 2 Wave 3 Results (S2B roundtrip + S5B atomic + S6A fileio)
+- PineKite → S2B yaml-roundtrip-z64: BLOCKED on Pivot Signal #1 (empty-slice omitempty drift), RESOLVED via schema fix (commit 2d17b7e remove omitempty from Aliases), 4 fixtures pass
+- NightFalcon → S5B atomic-impl-o1d: DONE (commit 12e504e, 5 properties enforced)
+- MossViper → S6A fileio-p06: DONE (commit eb86a17, call-time HOME resolution)
+
+## Phase 2 Wave 4 Results (S7B golden + S7C CI + remaining P2 carryover)
+- CrimsonOwl → S7B golden-harness-nn5: DONE (commit 2511e6d, SHA-pinned v1.0.0, 3 fixtures)
+- SilverHawk → S8A ci-job-sprawl-n2y: DONE (commit aa00fab, collapsed 4 jobs → 1 go-checks per OS)
+- AmberFalcon → S7C golden-ci-bbz: DONE (commit 3e85e6b, go-golden job in CI)
+- RustLynx → S8D stat-portability-rci: DONE (commit 6b16e8f, wc -c replaces stat -c%s)
+- CopperRaven → S8C test-contract-ej6: DONE (commit c71993d, main_test.go version contract)
+- JadeOwl → S8B artifact-prefix-ck9: DONE (commit 2a0d4d9, hostie-bun-* prefix for v1)
+
+## Phase 2 Exit State Summary (15 clauses)
+- ✓ Clauses 1-7: domain/ (6 files, 91 tests), core/yaml/ (3 files), core/render/ (2 files), core/etchosts/ (4 files), core/fileio/ (2 files), golden harness (1 file, 4 fixtures)
+- ✓ Clause 8: 8/8 P2 carryover beads closed (4 required, closed all 8)
+- ✓ Clause 9: HIGH-risk spikes resolved (.spikes/go-migration/p2-atomic-write/FINDINGS.md)
+- ✓ Clause 10: go build+test+vet green (212 tests, 6 packages)
+- ✓ Clause 11: staticcheck advisory (CI green)
+- ✓ Clause 12: binary size ≤18 MB (no regression from Phase 1 baseline)
+- ✓ Clause 13: v1 src/ untouched (0 diff lines)
+- ✓ Clause 14: All 15 Phase 2 beads closed
+- ✓ Clause 15: No CLI surface yet (main.go stub only)
+- Pivot Signal #1: triggered then resolved (schema fix commit 2d17b7e)
+- HEAD: 0b62dfc (chore commit after final bead closure)
 
 ## Workers
 | Name | Status | Current Bead | Reserved Files |
 |------|--------|--------------|----------------|
-| PineKite | dispatched | hosts-cli-go-mig-p2-yaml-roundtrip-z64 | go/test/fixtures/hosts/, go/internal/core/yaml/roundtrip_test.go |
-| NightFalcon | dispatched | hosts-cli-go-mig-p2-atomic-impl-o1d | go/internal/core/etchosts/atomic.go, atomic_test.go |
-| MossViper | dispatched | hosts-cli-go-mig-p2-fileio-p06 | go/internal/core/fileio/fileio.go, fileio_test.go |
+| BlackOtter | done | hosts-cli-go-mig-p2-domain-types-2sw | — |
+| VioletHeron | done | hosts-cli-go-mig-p2-domain-id-a5r | — |
+| SilverFinch | done | hosts-cli-go-mig-p2-domain-validators-rhk | — |
+| CopperFox | done | hosts-cli-go-mig-p2-clipboard-audit-fn0 | — |
+| GoldenWren | done | hosts-cli-go-mig-p2-yaml-marshal-9ey | — |
+| RustOwl | done | hosts-cli-go-mig-p2-render-0fg | — |
+| JadeStag | done | hosts-cli-go-mig-p2-etchosts-marker-9o1 | — |
+| PineKite | done | hosts-cli-go-mig-p2-yaml-roundtrip-z64 | — |
+| NightFalcon | done | hosts-cli-go-mig-p2-atomic-impl-o1d | — |
+| MossViper | done | hosts-cli-go-mig-p2-fileio-p06 | — |
+| CrimsonOwl | done | hosts-cli-go-mig-p2-golden-harness-nn5 | — |
+| SilverHawk | done | hosts-cli-p1-review-p2-ci-job-sprawl-n2y | — |
+| AmberFalcon | done | hosts-cli-go-mig-p2-golden-ci-bbz | — |
+| RustLynx | done | hosts-cli-p1-review-p2-stat-portability-rci | — |
+| CopperRaven | done | hosts-cli-p1-review-p2-test-contract-ej6 | — |
+| JadeOwl | done | hosts-cli-p1-review-p2-artifact-prefix-ck9 | — |
 
 ## Phase 1 Bootstrap Results
 - 6/6 beads closed. Commits: eb7c93e, 52f6c79, 25c5382, eed60e6, 04d1421, 908d5fc on feature/go-migration.
