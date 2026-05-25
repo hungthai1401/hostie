@@ -136,11 +136,12 @@ jobs:
           echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
           for dir in artifacts/hostie-go-*; do
             name=$(basename "$dir")
-            bin=$(find "$dir" -type f ! -name '*.sha256' | head -1)
-            if [ -z "$bin" ]; then
-              echo "::error::no binary found in $dir"; FAIL=1; continue
+            bins=("$dir"/hostie-go-*)
+            if [ ${#bins[@]} -ne 1 ]; then
+              echo "::error::expected 1 binary in $dir, got ${#bins[@]}"; FAIL=1; continue
             fi
-            size=$(stat -c%s "$bin")
+            bin="${bins[0]}"
+            size=$(wc -c <"$bin")
             mb=$(awk "BEGIN {printf \"%.2f\", $size/1024/1024}")
             if [ "$size" -gt $((18*1024*1024)) ]; then
               echo "::error::$name = ${mb} MB > 18 MB hard ceiling"
