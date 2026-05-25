@@ -6,6 +6,9 @@ dist/
 .spikes/**/*.tar.gz
 .spikes/**/*.sbom.json
 .spikes/**/gum_*/
+.spikes/**/hostie-darwin-*
+.spikes/**/hostie-linux-*
+!.spikes/**/hostie-*.sha256
 
 # Local Go workspace leakage (GOPATH-style caches and stray builds)
 /bin/

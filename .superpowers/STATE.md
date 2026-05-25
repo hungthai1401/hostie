@@ -1,8 +1,8 @@
 ## Current
-- **Skill:** writing-plans
+- **Skill:** validating
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** 2 (Core port) — planning complete, handing off to validating
+- **Phase:** 2 (Core port) — gate-2
 
 ## Phase 2 Planning Output
 - `docs/go-migration/phase-2-contract.md` — entry state, 15 exit-state clauses, demo story, unlocks, 7 pivot signals.
