@@ -224,3 +224,162 @@ describe("applyHostsFile — malformed /etc/hosts", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// applyHostsFile — preserves /etc/hosts mode + uid/gid across atomic rename
+// ---------------------------------------------------------------------------
+//
+// Regression for hosts-cli-379.64: the previous implementation wrote a temp
+// file and renamed it over /etc/hosts but never chmod/chown'd the temp, so
+// after `hostie apply` /etc/hosts could end up 0600 or owned by the calling
+// user — which breaks system DNS lookups (must remain 0644 root:wheel on
+// macOS / root:root on Linux). Mirrors src/core/etchosts.ts:writeEtcHosts.
+
+describe("applyHostsFile — preserves mode + uid + gid", () => {
+  const hostsFileWithEntry: HostsFile = {
+    version: 1,
+    groups: [
+      {
+        name: "work",
+        entries: [
+          {
+            id: "e1",
+            ip: "10.0.0.1",
+            hostname: "api.local",
+            aliases: [],
+            enabled: true,
+          },
+        ],
+        groups: [],
+      },
+    ],
+  };
+
+  test("chmods + chowns temp file to original /etc/hosts mode/uid/gid before rename", async () => {
+    const ORIGINAL_MODE = 0o644;
+    const ORIGINAL_UID = 0;
+    const ORIGINAL_GID = 0;
+
+    // No existing managed block → buildNewContent will append.
+    const currentEtcHosts = "127.0.0.1 localhost\n";
+
+    const readSpy = spyOn(fs, "readFileSync").mockReturnValue(currentEtcHosts);
+    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(() => {});
+    const statSpy = spyOn(fs, "statSync").mockImplementation((p: any) => {
+      // Only intercept the /etc/hosts stat. Return a minimal Stats-like obj
+      // with the file-type bit set so the mask in apply.ts is exercised.
+      if (String(p) === "/etc/hosts") {
+        return {
+          mode: 0o100000 | ORIGINAL_MODE, // S_IFREG | 0644
+          uid: ORIGINAL_UID,
+          gid: ORIGINAL_GID,
+        } as any;
+      }
+      // Fall through to a generic stat for any other path bun internals hit.
+      return { mode: 0o100644, uid: 0, gid: 0 } as any;
+    });
+    const chmodSpy = spyOn(fs, "chmodSync").mockImplementation(() => {});
+    const chownSpy = spyOn(fs, "chownSync").mockImplementation(() => {});
+    const renameSpy = spyOn(fs, "renameSync").mockImplementation(() => {});
+
+    try {
+      const result = await applyHostsFile(hostsFileWithEntry);
+      expect(result.changed).toBe(true);
+
+      // The temp file must have been chmod'd to 0644 (mask of the original).
+      expect(chmodSpy).toHaveBeenCalledTimes(1);
+      const [chmodPath, chmodMode] = chmodSpy.mock.calls[0];
+      expect(chmodMode).toBe(ORIGINAL_MODE);
+      expect(String(chmodPath)).toContain("hostie-"); // temp dir prefix
+
+      // The temp file must have been chown'd to the original uid/gid.
+      expect(chownSpy).toHaveBeenCalledTimes(1);
+      const [chownPath, uid, gid] = chownSpy.mock.calls[0];
+      expect(uid).toBe(ORIGINAL_UID);
+      expect(gid).toBe(ORIGINAL_GID);
+      expect(String(chownPath)).toContain("hostie-");
+
+      // chmod + chown must both happen BEFORE the rename so the destination
+      // inherits the correct perms atomically.
+      expect(renameSpy).toHaveBeenCalledTimes(1);
+      const chmodOrder = chmodSpy.mock.invocationCallOrder[0];
+      const chownOrder = chownSpy.mock.invocationCallOrder[0];
+      const renameOrder = renameSpy.mock.invocationCallOrder[0];
+      expect(chmodOrder).toBeLessThan(renameOrder);
+      expect(chownOrder).toBeLessThan(renameOrder);
+
+      // The rename target must be /etc/hosts.
+      const [, renameTarget] = renameSpy.mock.calls[0];
+      expect(String(renameTarget)).toBe("/etc/hosts");
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+      statSpy.mockRestore();
+      chmodSpy.mockRestore();
+      chownSpy.mockRestore();
+      renameSpy.mockRestore();
+    }
+  });
+
+  test("masks off file-type bits so chmod receives only permission bits", async () => {
+    // If /etc/hosts is 0644 with S_IFREG, stats.mode is 0o100644.
+    // apply.ts must mask to 0o7777 before chmod, otherwise chmod would set
+    // bogus high bits.
+    const readSpy = spyOn(fs, "readFileSync").mockReturnValue("127.0.0.1 localhost\n");
+    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(() => {});
+    const statSpy = spyOn(fs, "statSync").mockImplementation(() => ({
+      mode: 0o100644,
+      uid: 0,
+      gid: 0,
+    } as any));
+    const chmodSpy = spyOn(fs, "chmodSync").mockImplementation(() => {});
+    const chownSpy = spyOn(fs, "chownSync").mockImplementation(() => {});
+    const renameSpy = spyOn(fs, "renameSync").mockImplementation(() => {});
+
+    try {
+      await applyHostsFile(hostsFileWithEntry);
+      const [, chmodMode] = chmodSpy.mock.calls[0];
+      // Must be 0o644, NOT 0o100644.
+      expect(chmodMode).toBe(0o644);
+      expect(chmodMode! & 0o170000).toBe(0); // no file-type bits leaked
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+      statSpy.mockRestore();
+      chmodSpy.mockRestore();
+      chownSpy.mockRestore();
+      renameSpy.mockRestore();
+    }
+  });
+
+  test("tolerates EPERM on chown (non-root caller) and still completes rename", async () => {
+    const readSpy = spyOn(fs, "readFileSync").mockReturnValue("127.0.0.1 localhost\n");
+    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(() => {});
+    const statSpy = spyOn(fs, "statSync").mockImplementation(() => ({
+      mode: 0o100644,
+      uid: 0,
+      gid: 0,
+    } as any));
+    const chmodSpy = spyOn(fs, "chmodSync").mockImplementation(() => {});
+    const chownSpy = spyOn(fs, "chownSync").mockImplementation(() => {
+      const err: any = new Error("operation not permitted");
+      err.code = "EPERM";
+      throw err;
+    });
+    const renameSpy = spyOn(fs, "renameSync").mockImplementation(() => {});
+
+    try {
+      const result = await applyHostsFile(hostsFileWithEntry);
+      expect(result.changed).toBe(true);
+      // Rename must still happen — EPERM on chown is non-fatal.
+      expect(renameSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+      statSpy.mockRestore();
+      chmodSpy.mockRestore();
+      chownSpy.mockRestore();
+      renameSpy.mockRestore();
+    }
+  });
+});

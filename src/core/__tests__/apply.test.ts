@@ -59,6 +59,23 @@ beforeEach(() => {
   spies.push(
     spyOn(fs, "mkdtempSync").mockImplementation((() => "/tmp/hostie-fake") as any)
   );
+
+  // The atomic-write path in apply.ts also calls statSync/chmodSync/chownSync
+  // on the temp file to preserve /etc/hosts ownership across the rename
+  // (hosts-cli-379.64). Mock them so the temp file never has to exist on disk.
+  spies.push(
+    spyOn(fs, "statSync").mockImplementation((() => ({
+      mode: 0o100644,
+      uid: 0,
+      gid: 0,
+    })) as any)
+  );
+  spies.push(
+    spyOn(fs, "chmodSync").mockImplementation((() => {}) as any)
+  );
+  spies.push(
+    spyOn(fs, "chownSync").mockImplementation((() => {}) as any)
+  );
 });
 
 afterEach(() => {

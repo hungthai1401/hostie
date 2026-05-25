@@ -5,7 +5,7 @@
  * Only writes if content has changed to avoid unnecessary I/O
  */
 
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, statSync, chmodSync, chownSync } from "fs";
 import { mkdtempSync, renameSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -268,13 +268,46 @@ export async function applyHostsFile(hostsFile: HostsFile): Promise<ApplyResult>
     
     // Content differs - write atomically
     try {
-      // Atomic write: write to temp file, then rename
+      // Capture original ownership/mode so the atomic rename preserves them.
+      // /etc/hosts must remain 0644 root:wheel (macOS) / root:root (Linux);
+      // dropping these breaks system DNS lookups (see hosts-cli-379.64).
+      let originalMode = 0o644;
+      let originalUid: number | null = null;
+      let originalGid: number | null = null;
+      try {
+        const stats = statSync(ETC_HOSTS_PATH);
+        // Mask to permission bits only (drop file-type bits) so chmodSync
+        // receives a clean mode value.
+        originalMode = stats.mode & 0o7777;
+        originalUid = stats.uid;
+        originalGid = stats.gid;
+      } catch (statErr: any) {
+        // If /etc/hosts doesn't exist, fall back to 0644 with no chown.
+        if (statErr.code !== "ENOENT") throw statErr;
+      }
+
+      // Atomic write: write to temp file, apply perms+ownership, then rename.
       const tempDir = mkdtempSync(join(tmpdir(), 'hostie-'));
       const tempFile = join(tempDir, 'hosts');
-      
+
       writeFileSync(tempFile, newContent, 'utf-8');
+
+      // Preserve mode (0644) and uid/gid before the rename so the destination
+      // inherits the correct ownership atomically.
+      chmodSync(tempFile, originalMode);
+      if (originalUid !== null && originalGid !== null) {
+        try {
+          chownSync(tempFile, originalUid, originalGid);
+        } catch (chownErr: any) {
+          // chown may fail with EPERM when not running as root. The atomic
+          // rename can still proceed; the file simply keeps the caller's uid.
+          // We only swallow EPERM — everything else is fatal.
+          if (chownErr.code !== "EPERM") throw chownErr;
+        }
+      }
+
       renameSync(tempFile, ETC_HOSTS_PATH);
-      
+
       return {
         changed: true,
         message: "/etc/hosts updated successfully",
