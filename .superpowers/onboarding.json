@@ -1,0 +1,17 @@
+{
+  "version": "1.1.0",
+  "installed_at": "2026-05-22T07:16:42.744Z",
+  "updated_at": "2026-05-22T07:54:52.127Z",
+  "managed_assets": [
+    ".superpowers/onboarding.json",
+    "CLAUDE.md",
+    "AGENTS.md",
+    ".codex/hooks.json",
+    ".codex/hooks/superpowers_session_start.mjs",
+    ".claude/settings.json",
+    ".claude/hooks/superpowers_session_start.js",
+    ".superpowers/superpowers_status.mjs",
+    ".superpowers/superpowers_state.mjs",
+    ".superpowers/superpowers_reservations.mjs"
+  ]
+}

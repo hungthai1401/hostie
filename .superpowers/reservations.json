@@ -1,0 +1,127 @@
+[
+  {
+    "agent": "DuskHorizon",
+    "bead": "hosts-cli-379.53",
+    "paths": [
+      "README.md"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:23:48.100Z",
+    "reserved_at": "2026-05-25T02:23:48.102Z"
+  },
+  {
+    "agent": "JadeRiver",
+    "bead": "hosts-cli-379.59",
+    "paths": [
+      "tests/cli/commands.test.ts"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:23:52.459Z",
+    "reserved_at": "2026-05-25T02:23:52.460Z"
+  },
+  {
+    "agent": "AmberDawn",
+    "bead": "hosts-cli-379.50",
+    "paths": [
+      "tsconfig.json"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:23:58.557Z",
+    "reserved_at": "2026-05-25T02:23:58.558Z"
+  },
+  {
+    "agent": "HazelGrove",
+    "bead": "hosts-cli-379.57",
+    "paths": [
+      "tests/core/etchosts.test.ts"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:24:00.578Z",
+    "reserved_at": "2026-05-25T02:24:00.582Z"
+  },
+  {
+    "agent": "IcyCascade",
+    "bead": "hosts-cli-379.58",
+    "paths": [
+      "tests/core/apply.test.ts"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:24:06.781Z",
+    "reserved_at": "2026-05-25T02:24:06.782Z"
+  },
+  {
+    "agent": "FrostMeadow",
+    "bead": "hosts-cli-379.55",
+    "paths": [
+      "tests/core/yaml.test.ts"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:24:13.261Z",
+    "reserved_at": "2026-05-25T02:24:13.262Z"
+  },
+  {
+    "agent": "GildedPond",
+    "bead": "hosts-cli-379.56",
+    "paths": [
+      "tests/core/render.test.ts"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:24:19.818Z",
+    "reserved_at": "2026-05-25T02:24:19.820Z"
+  },
+  {
+    "agent": "KelpCove",
+    "bead": "hosts-cli-379.60",
+    "paths": [
+      "tests/tui/MANUAL_CHECKLIST.md"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:24:22.624Z",
+    "reserved_at": "2026-05-25T02:24:22.627Z"
+  },
+  {
+    "agent": "CoralMist",
+    "bead": "hosts-cli-379.52",
+    "paths": [
+      "completions/*"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:24:23.921Z",
+    "reserved_at": "2026-05-25T02:24:23.923Z"
+  },
+  {
+    "agent": "EmberSky",
+    "bead": "hosts-cli-379.54",
+    "paths": [
+      "tests/domain/*"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:24:31.519Z",
+    "reserved_at": "2026-05-25T02:24:31.520Z"
+  },
+  {
+    "agent": "MorningStar",
+    "bead": "hosts-cli-379.44",
+    "paths": [
+      "src/tui/hooks/useKeyboard.ts",
+      "src/tui/hooks/__tests__/useKeyboard.test.ts",
+      "src/tui/store.ts",
+      "src/tui/components/HelpModal.tsx",
+      "src/tui/components/MoveToGroupModal.tsx"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:24:43.986Z",
+    "reserved_at": "2026-05-25T02:24:43.989Z"
+  },
+  {
+    "agent": "BronzeFalls",
+    "bead": "hosts-cli-379.51",
+    "paths": [
+      "build.ts",
+      "package.json"
+    ],
+    "ttl": 3600,
+    "expires_at": "2026-05-25T03:25:50.715Z",
+    "reserved_at": "2026-05-25T02:25:50.717Z"
+  }
+]
