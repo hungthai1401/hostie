@@ -28,20 +28,27 @@ import type { Entry, Group, HostsFile } from "../domain/types";
  */
 export function renderEntry(entry: Entry): string {
   const parts: string[] = [entry.ip, entry.hostname];
-  
+
   // Add aliases if present
   if (entry.aliases.length > 0) {
     parts.push(...entry.aliases);
   }
-  
+
   // Join with single space
   let line = parts.join(" ");
-  
+
   // Add comment if present
   if (entry.comment) {
     line += ` # ${entry.comment}`;
   }
-  
+
+  // Disabled entries are emitted as `#`-commented lines so they remain
+  // visible (and easily re-enabled by toggling the comment) in /etc/hosts.
+  // See design.md:108 + rendered example :140-147. (hosts-cli-379.71)
+  if (entry.enabled === false) {
+    line = `# ${line}`;
+  }
+
   return line;
 }
 
@@ -72,21 +79,20 @@ export function wrapManagedBlock(content: string): string {
  * @param group - The group to traverse
  * @returns Array of enabled entries (flattened)
  */
-function collectEnabledEntries(group: Group): Entry[] {
+function collectAllEntries(group: Group): Entry[] {
   const entries: Entry[] = [];
-  
-  // Collect enabled entries from this group
+
+  // hosts-cli-379.71: include disabled entries. renderEntry now emits them
+  // as `#`-commented lines per design.md:108.
   for (const entry of group.entries) {
-    if (entry.enabled) {
-      entries.push(entry);
-    }
+    entries.push(entry);
   }
-  
+
   // Recursively collect from subgroups
   for (const subgroup of group.groups) {
-    entries.push(...collectEnabledEntries(subgroup));
+    entries.push(...collectAllEntries(subgroup));
   }
-  
+
   return entries;
 }
 
@@ -123,9 +129,10 @@ function collectEnabledEntries(group: Group): Entry[] {
 export function renderHostsFile(hostsFile: HostsFile): string {
   const allEntries: Entry[] = [];
   
-  // Collect all enabled entries from all groups (flattened)
+  // Collect ALL entries (enabled and disabled) from all groups (flattened).
+  // Disabled entries are rendered as `#`-commented lines by renderEntry.
   for (const group of hostsFile.groups) {
-    allEntries.push(...collectEnabledEntries(group));
+    allEntries.push(...collectAllEntries(group));
   }
   
   // Render each entry

@@ -165,8 +165,9 @@ describe("extractManagedBlock — malformed input", () => {
     } catch (err) {
       const msg = (err as Error).message;
       expect(msg).toMatch(/--force/);
-      // The message should give the operator something to do
-      expect(msg.length).toBeGreaterThan(40);
+      // The message must point the operator at a concrete action
+      // (review-p3-test-polish-kzs / finding W).
+      expect(msg).toMatch(/repair|remove/i);
     }
   });
 });
@@ -178,51 +179,94 @@ describe("extractManagedBlock — malformed input", () => {
 describe("applyHostsFile — malformed /etc/hosts", () => {
   const emptyHostsFile: HostsFile = { version: 1, groups: [] };
 
-  afterEach(() => {
-    // bun:test restores spies between describe blocks but be explicit
-  });
+  // hosts-cli-379.70: every malformed shape that extractManagedBlock
+  // throws on MUST also be asserted at the applyHostsFile layer to
+  // prove no writeFileSync / renameSync was attempted. Otherwise a
+  // future refactor that swallows the throw could silently corrupt
+  // /etc/hosts on three of the five shapes.
+  const MALFORMED_FIXTURES: Array<{
+    name: string;
+    content: string;
+    errorPattern: RegExp;
+  }> = [
+    {
+      name: "BEGIN without END (truncated write)",
+      content: `127.0.0.1 localhost\n${BEGIN}\n10.0.0.1 api.local\n`,
+      errorPattern: /unbalanced|malformed/i,
+    },
+    {
+      name: "END without BEGIN (manual edit damage)",
+      content: `127.0.0.1 localhost\n${END}\n`,
+      errorPattern: /unbalanced|malformed/i,
+    },
+    {
+      name: "two BEGIN markers",
+      content: [
+        "127.0.0.1 localhost",
+        BEGIN,
+        "10.0.0.1 api.local",
+        END,
+        BEGIN,
+        "10.0.0.2 db.local",
+        END,
+        "",
+      ].join("\n"),
+      errorPattern: /multiple|nested|unbalanced/i,
+    },
+    {
+      name: "nested BEGIN/BEGIN/END/END",
+      content: [
+        "127.0.0.1 localhost",
+        BEGIN,
+        "10.0.0.1 api.local",
+        BEGIN,
+        "10.0.0.2 db.local",
+        END,
+        END,
+        "",
+      ].join("\n"),
+      errorPattern: /multiple|nested|unbalanced/i,
+    },
+    {
+      name: "END before BEGIN (order corruption)",
+      content: [
+        "127.0.0.1 localhost",
+        END,
+        "10.0.0.1 api.local",
+        BEGIN,
+        "",
+      ].join("\n"),
+      errorPattern: /wrong order|unbalanced|malformed/i,
+    },
+  ];
 
-  test("rejects /etc/hosts with BEGIN marker but no END (no duplicate append)", async () => {
-    const malformed = `127.0.0.1 localhost\n${BEGIN}\n10.0.0.1 api.local\n`;
-    const readSpy = spyOn(fs, "readFileSync").mockReturnValue(malformed);
-    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(() => {});
-
-    try {
-      await expect(applyHostsFile(emptyHostsFile)).rejects.toThrow(
-        /unbalanced|malformed/i,
+  test.each(MALFORMED_FIXTURES)(
+    "rejects $name without calling writeFileSync or renameSync",
+    async ({ content, errorPattern }) => {
+      const readSpy = spyOn(fs, "readFileSync").mockReturnValue(content);
+      const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(
+        () => {},
       );
-      // CRITICAL: we must NOT have written anything when the input is malformed.
-      expect(writeSpy).not.toHaveBeenCalled();
-    } finally {
-      readSpy.mockRestore();
-      writeSpy.mockRestore();
-    }
-  });
-
-  test("rejects /etc/hosts with two BEGIN markers", async () => {
-    const malformed = [
-      "127.0.0.1 localhost",
-      BEGIN,
-      "10.0.0.1 api.local",
-      END,
-      BEGIN,
-      "10.0.0.2 db.local",
-      END,
-      "",
-    ].join("\n");
-    const readSpy = spyOn(fs, "readFileSync").mockReturnValue(malformed);
-    const writeSpy = spyOn(fs, "writeFileSync").mockImplementation(() => {});
-
-    try {
-      await expect(applyHostsFile(emptyHostsFile)).rejects.toThrow(
-        /multiple|nested|unbalanced/i,
+      const renameSpy = spyOn(fs, "renameSync").mockImplementation(
+        () => {},
       );
-      expect(writeSpy).not.toHaveBeenCalled();
-    } finally {
-      readSpy.mockRestore();
-      writeSpy.mockRestore();
-    }
-  });
+
+      try {
+        await expect(applyHostsFile(emptyHostsFile)).rejects.toThrow(
+          errorPattern,
+        );
+        // CRITICAL contract: no writes on malformed input. Without these
+        // assertions, a future catch-and-recover would silently corrupt
+        // /etc/hosts on these shapes.
+        expect(writeSpy).not.toHaveBeenCalled();
+        expect(renameSpy).not.toHaveBeenCalled();
+      } finally {
+        readSpy.mockRestore();
+        writeSpy.mockRestore();
+        renameSpy.mockRestore();
+      }
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

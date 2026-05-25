@@ -162,7 +162,7 @@ describe("applyHostsFile", () => {
     expect(state.written).toContain("127.0.0.1 localhost");
   });
 
-  test("skips disabled entries", async () => {
+  test("renders disabled entries as #-commented lines (design.md:108)", async () => {
     const result = await applyHostsFile(
       makeFile([
         {
@@ -177,8 +177,12 @@ describe("applyHostsFile", () => {
     );
 
     expect(result.changed).toBe(true);
+    // Enabled entry: bare line.
     expect(state.written).toContain("1.1.1.1 on.host");
-    expect(state.written).not.toContain("2.2.2.2 off.host");
+    // Disabled entry: same line prefixed with `# ` per design.md:108.
+    // (hosts-cli-379.71 — reverses the .66 regression where disabled
+    // entries were dropped entirely.)
+    expect(state.written).toContain("# 2.2.2.2 off.host");
   });
 
   test("renders aliases", async () => {
@@ -288,5 +292,47 @@ describe("applyHostsFile", () => {
     const result = await applyHostsFile(makeFile([]));
     expect(result.changed).toBe(false);
     expect(result.message).toContain("Permission denied");
+  });
+  test("design.md:140-147 fixture round-trips: nested groups + disabled entries (hosts-cli-379.71)", async () => {
+    // This fixture mirrors the rendered example in design.md:140-147:
+    //   # group: work
+    //   10.0.1.5  jira.work       (single space here, not double)
+    //   # group: work/prod
+    //   10.0.2.10 db.prod.work
+    //   # 10.0.2.11 db-replica.prod.work
+    const result = await applyHostsFile(
+      makeFile([
+        {
+          name: "work",
+          entries: [
+            { id: "1", ip: "10.0.1.5", hostname: "jira.work", aliases: [], enabled: true },
+          ],
+          groups: [
+            {
+              name: "prod",
+              entries: [
+                { id: "2", ip: "10.0.2.10", hostname: "db.prod.work", aliases: [], enabled: true },
+                { id: "3", ip: "10.0.2.11", hostname: "db-replica.prod.work", aliases: [], enabled: false },
+              ],
+              groups: [],
+            },
+          ],
+        },
+      ])
+    );
+
+    expect(result.changed).toBe(true);
+    const written = state.written ?? "";
+    // Group headers use full path syntax.
+    expect(written).toContain("# group: work");
+    expect(written).toContain("# group: work/prod");
+    // Enabled entries: bare lines.
+    expect(written).toContain("10.0.1.5 jira.work");
+    expect(written).toContain("10.0.2.10 db.prod.work");
+    // Disabled entry: `# ` prefix preserves it visibly in /etc/hosts.
+    expect(written).toContain("# 10.0.2.11 db-replica.prod.work");
+    // BEGIN/END markers wrap the block.
+    expect(written).toContain(BEGIN_MARKER);
+    expect(written).toContain(END_MARKER);
   });
 });

@@ -177,7 +177,7 @@ describe("renderHostsFile", () => {
     expect(result).toContain("# END HOSTIE");
   });
 
-  test("filters out disabled entries", () => {
+  test("renders disabled entries as #-commented lines (design.md:108, hosts-cli-379.71)", () => {
     const hostsFile = {
       version: 1 as const,
       groups: [
@@ -205,7 +205,8 @@ describe("renderHostsFile", () => {
     };
     const result = renderHostsFile(hostsFile);
     expect(result).toContain("192.168.1.1 enabled.com");
-    expect(result).not.toContain("192.168.1.2 disabled.com");
+    // Disabled entry must be present, but as a `#`-commented line.
+    expect(result).toContain("# 192.168.1.2 disabled.com");
   });
 
   test("flattens nested groups", () => {

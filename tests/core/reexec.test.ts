@@ -47,6 +47,16 @@ let originalGetUid: typeof process.getuid | undefined;
 let originalArgv: string[];
 let capturedExitCode: number | undefined;
 
+// Resolve execPath the same way reexecWithSudo does so test assertions
+// match production behavior. (hosts-cli-379.72)
+let expectedArgv0: string;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  expectedArgv0 = require("fs").realpathSync(process.execPath);
+} catch {
+  expectedArgv0 = process.execPath;
+}
+
 class ProcessExitError extends Error {
   constructor(public code: number) {
     super(`process.exit(${code})`);
@@ -132,7 +142,7 @@ describe("reexecWithSudo", () => {
     restoreArgv();
   });
 
-  test("spawns sudo with argv preserved verbatim", async () => {
+  test("spawns sudo with resolved execPath + argv preserved verbatim", async () => {
     setGetUid(501); // non-root user
     setArgv([
       "/usr/local/bin/bun",
@@ -148,10 +158,13 @@ describe("reexecWithSudo", () => {
       if (!(e instanceof ProcessExitError)) throw e;
     }
 
+    // hosts-cli-379.72: argv[1] must be the resolved process.execPath, NOT
+    // Bun.argv[0]. In a `bun build --compile` binary, Bun.argv[0] is the
+    // embedded virtual-FS path "/$bunfs/root/<name>", which sudo cannot exec.
     expect(spawnCaptures.length).toBe(1);
     expect(spawnCaptures[0].cmd).toEqual([
       "sudo",
-      "/usr/local/bin/bun",
+      expectedArgv0,
       "/Users/me/hostie/dist/index.js",
       "apply",
       "--dry-run",
@@ -284,7 +297,7 @@ describe("reexecWithSudo", () => {
 
     expect(spawnCaptures[0].cmd).toEqual([
       "sudo",
-      "/usr/local/bin/bun",
+      expectedArgv0,
       "/path/to/script.js",
       "add",
       "10.0.0.1",
@@ -293,6 +306,72 @@ describe("reexecWithSudo", () => {
       "work",
       "--alias",
       "api",
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration: applyHostsFile → EACCES → reexecWithSudo
+// (hosts-cli-379.72 + closes review-p2-reexec-integration)
+// ---------------------------------------------------------------------------
+
+import { spyOn } from "bun:test";
+import * as etchostsModule from "../../src/core/etchosts";
+
+describe("applyHostsFile → EACCES → reexecWithSudo integration", () => {
+  let writeSpy: ReturnType<typeof spyOn>;
+  let readSpy: ReturnType<typeof spyOn>;
+
+  beforeEach(() => {
+    installSpawnStub();
+    installExitStub();
+    nextExitCode = 0;
+
+    const fs = require("fs");
+    readSpy = spyOn(fs, "readFileSync").mockImplementation(() => "");
+
+    writeSpy = spyOn(etchostsModule, "writeEtcHosts").mockImplementation(
+      async () => {
+        const err: any = new Error("EACCES: permission denied");
+        err.code = "EACCES";
+        throw err;
+      },
+    );
+  });
+
+  afterEach(() => {
+    writeSpy.mockRestore();
+    readSpy.mockRestore();
+    restoreSpawnStub();
+    restoreExitStub();
+    restoreGetUid();
+    restoreArgv();
+  });
+
+  test("EACCES from writeEtcHosts triggers sudo re-exec with resolved execPath", async () => {
+    setGetUid(501);
+    setArgv(["/usr/local/bin/bun", "/path/to/hostie", "apply"]);
+
+    const hostsFile = { version: 1, groups: [] } as any;
+
+    try {
+      await applyModule.applyHostsFile(hostsFile);
+    } catch (e) {
+      if (!(e instanceof ProcessExitError)) throw e;
+    }
+
+    // The integration contract: writeEtcHosts threw EACCES, applyHostsFile
+    // caught it, called reexecWithSudo, which spawned sudo with the
+    // resolved process.execPath as argv[1]. Without the .72 fix, argv[1]
+    // would be "/$bunfs/root/hostie" in a compiled binary and sudo would
+    // immediately fail with "Module not found".
+    expect(spawnCaptures.length).toBe(1);
+    expect(spawnCaptures[0].cmd[0]).toBe("sudo");
+    expect(spawnCaptures[0].cmd[1]).toBe(expectedArgv0);
+    expect(spawnCaptures[0].cmd[1]).not.toMatch(/\$bunfs/);
+    expect(spawnCaptures[0].cmd.slice(2)).toEqual([
+      "/path/to/hostie",
+      "apply",
     ]);
   });
 });

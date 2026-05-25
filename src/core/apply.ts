@@ -23,7 +23,7 @@
  *   3. The sudo re-exec path for EACCES on the atomic rename.
  */
 
-import { readFileSync } from "fs";
+import { readFileSync, realpathSync } from "fs";
 import type { Entry, Group, HostsFile } from "../domain/types";
 import { renderEntry } from "./render";
 import { writeEtcHosts } from "./etchosts";
@@ -55,8 +55,21 @@ export async function reexecWithSudo(): Promise<never> {
     throw new Error("Cannot write /etc/hosts even as root");
   }
 
-  // Re-exec with sudo, passing through all original arguments
-  const result = Bun.spawn(["sudo", Bun.argv[0], ...Bun.argv.slice(1)], {
+  // Re-exec with sudo, passing through all original arguments.
+  //
+  // Use process.execPath (resolved through any symlinks) rather than
+  // Bun.argv[0]. In a `bun build --compile` single-file binary, Bun.argv[0]
+  // is the embedded virtual-FS path "/$bunfs/root/<name>", which sudo cannot
+  // exec. process.execPath is the real on-disk binary path, which works for
+  // compiled binaries, `bun run`, and node. (hosts-cli-379.72)
+  let argv0: string;
+  try {
+    argv0 = realpathSync(process.execPath);
+  } catch {
+    argv0 = process.execPath;
+  }
+
+  const result = Bun.spawn(["sudo", argv0, ...Bun.argv.slice(1)], {
     stdio: ["inherit", "inherit", "inherit"],
   });
 
@@ -67,20 +80,19 @@ export async function reexecWithSudo(): Promise<never> {
 /**
  * Render a single group and its subgroups into the on-disk block layout
  * used inside /etc/hosts: a `# group: <path>` header followed by each
- * enabled entry, then recurse into subgroups with their `parent/child`
- * paths. Disabled entries are skipped entirely (they are not commented
- * out in the managed block).
+ * entry (enabled or disabled — disabled are rendered as `#`-commented
+ * lines by renderEntry per design.md:108), then recurse into subgroups
+ * with their `parent/child` paths. (hosts-cli-379.71)
  */
 function renderGroupBlockLines(group: Group, path: string = ""): string[] {
   const lines: string[] = [];
   const groupPath = path ? `${path}/${group.name}` : group.name;
 
-  // Only emit a group header when there is at least one enabled entry
-  // directly in this group. Empty groups contribute no lines.
-  const enabledEntries = group.entries.filter((e) => e.enabled);
-  if (enabledEntries.length > 0) {
+  // Emit a group header when there is at least one entry (enabled or
+  // disabled) directly in this group. Empty groups contribute no lines.
+  if (group.entries.length > 0) {
     lines.push(`# group: ${groupPath}`);
-    for (const entry of enabledEntries) {
+    for (const entry of group.entries) {
       lines.push(renderEntry(entry));
     }
   }
