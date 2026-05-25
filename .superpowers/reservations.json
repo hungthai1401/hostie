@@ -30,16 +30,6 @@
     "reserved_at": "2026-05-25T02:23:58.558Z"
   },
   {
-    "agent": "HazelGrove",
-    "bead": "hosts-cli-379.57",
-    "paths": [
-      "tests/core/etchosts.test.ts"
-    ],
-    "ttl": 3600,
-    "expires_at": "2026-05-25T03:24:00.578Z",
-    "reserved_at": "2026-05-25T02:24:00.582Z"
-  },
-  {
     "agent": "IcyCascade",
     "bead": "hosts-cli-379.58",
     "paths": [
