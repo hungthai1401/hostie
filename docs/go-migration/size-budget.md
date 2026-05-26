@@ -1,10 +1,18 @@
-# Size Budget — Phase 1 Bootstrap
+# Size Budget — Phase 2 Core Port
 
-> **Status:** Baseline recorded. All four platforms well under the 10 MB aspirational target and the 18 MB hard ceiling (per **D2**). No pivot signal fired.
+> **Status:** Phase 2 complete. Binary size grew from 2.5–2.7 MB (Phase 1) to ~4.5 MB (Phase 2) due to real use of yaml.v3, oklog/ulid, validators, render, and etchosts packages. Still well under both the 10 MB aspirational target and 18 MB hard ceiling (per **D2**). No pivot signal fired.
 
-## 1. Measured sizes
+## 1. Phase 2 measured sizes
 
-First green CI run of the `go-size-check` job on `feature/go-migration`.
+Measured after implementing all Phase 2 core packages (domain, yaml, render, etchosts, fileio).
+
+| Platform | Bytes | MB | Status |
+|---|---:|---:|---|
+| darwin-arm64 | 4,698,112 | 4.48 | ✅ under 10 MB |
+
+Phase 2 adds real usage of yaml.v3, oklog/ulid/v2, validators, render pipeline, atomic etchosts writes, and fileio — resulting in ~1.9 MB growth from Phase 1 baseline.
+
+## 2. Phase 1 baseline (for comparison)
 
 | Platform | Bytes | MB | Status |
 |---|---:|---:|---|
@@ -13,20 +21,15 @@ First green CI run of the `go-size-check` job on `feature/go-migration`.
 | linux-amd64  | 2,621,592 | 2.50 | ✅ under 10 MB |
 | linux-arm64  | 2,621,592 | 2.50 | ✅ under 10 MB |
 
-These are the stripped binary sizes (`-s -w -trimpath`) produced by the release matrix in `.github/workflows/release.yml` (`go-build-release` job), verified by the `go-size-check` job per **TealRaven**'s bead `hosts-cli-go-mig-p1-sizecheck-aqy`.
-
-## 2. Ceiling status (vs D2)
+## 3. Ceiling status (vs D2)
 
 `design.md` **D2**: Build with `go build -trimpath -ldflags="-s -w"`. **Hard ceiling: 18 MB** per platform; **aspirational: ≤10 MB**.
 
-| Platform | Size | vs 18 MB hard | vs 10 MB aspirational |
+| Platform | Phase 2 Size | vs 18 MB hard | vs 10 MB aspirational |
 |---|---:|---:|---:|
-| darwin-arm64 | 2.57 MB | 15.43 MB headroom | 7.43 MB under |
-| darwin-amd64 | 2.57 MB | 15.43 MB headroom | 7.43 MB under |
-| linux-amd64  | 2.50 MB | 15.50 MB headroom | 7.50 MB under |
-| linux-arm64  | 2.50 MB | 15.50 MB headroom | 7.50 MB under |
+| darwin-arm64 | 4.48 MB | 13.52 MB headroom | 5.52 MB under |
 
-Both ceilings clear by a wide margin at the Phase 1 bootstrap stub.
+Phase 2 still clears both ceilings with comfortable margin.
 
 ## 3. Headroom analysis
 

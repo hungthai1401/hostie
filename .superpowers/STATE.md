@@ -2,7 +2,18 @@
 - **Skill:** reviewing
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** 4 (TUI port) — gate-3 (presenting to user)
+- **Phase:** 4 (TUI port) — gate-3 APPROVED; handoff to compounding
+
+## Phase 4 P1 Fix Loop (inline)
+All 5 P1 review beads CLOSED in 4 commits (7e717fd, a6564bf, 701fe69, f5675f4):
+- ChromeRaven → P1-D apply-privileged tests (10 cases, commit 7e717fd)
+- CinnamonHawk → P1-C+E keybinds (?, Enter wired, regression tests, commit a6564bf)
+- AzureWolf → P1-B bubbletea moved from apply/ to tui/app/sudo_exec.go (commit 701fe69)
+- OnyxBear → P1-A merge boundary: PrepareSudoHandoff + ExtractManagedBlock-based ValidatePayloadFile + privileged-side merge + conformance pin TestApply_DirectAndSudoPathsProduceIdenticalEtc + threat-model §3.3 updated (commit f5675f4)
+
+Re-review verdict: APPROVED. 4 minor P3 nits captured as off-epic beads (applycmddispatch-dead-param, etc-hosts-path-test-global-mutation, apply-privileged-cleanup-tolerance-test, sudo-cmd-test-blank-newline).
+
+Tests: 555 → 584 passing in 12 packages (29 new from P1 fixes). Build/vet clean.
 
 ## Phase 4 Review Findings (consolidated)
 - **Phase 1 (5 specialists)**: 4 P1, 12 P2, 17 P3 (after dedup). All beads created.
