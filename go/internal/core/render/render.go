@@ -49,7 +49,13 @@ func RenderEntry(e domain.Entry) string {
 
 	line := strings.Join(parts, " ")
 	if e.Comment != "" {
-		line += " # " + e.Comment
+		// Sanitize comment to prevent newline injection
+		if err := domain.ValidateComment(e.Comment); err != nil {
+			// Replace invalid comment with safe placeholder
+			line += " # [invalid comment removed]"
+		} else {
+			line += " # " + e.Comment
+		}
 	}
 	if !e.Enabled {
 		line = "# " + line

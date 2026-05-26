@@ -97,6 +97,16 @@ func TestRenderEntry(t *testing.T) {
 			entry: domain.Entry{IP: "10.0.0.1", Hostname: "test.local", Aliases: []string{"t1", "t2", "t3"}, Enabled: true, Comment: "Test"},
 			want:  "10.0.0.1 test.local t1 t2 t3 # Test",
 		},
+		{
+			name:  "comment with newline injection (sanitized)",
+			entry: domain.Entry{IP: "192.168.1.1", Hostname: "example.com", Enabled: true, Comment: "malicious\n192.168.1.2 evil.com"},
+			want:  "192.168.1.1 example.com # [invalid comment removed]",
+		},
+		{
+			name:  "comment with control character (sanitized)",
+			entry: domain.Entry{IP: "192.168.1.1", Hostname: "example.com", Enabled: true, Comment: "test\x00injection"},
+			want:  "192.168.1.1 example.com # [invalid comment removed]",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -165,6 +165,19 @@ func ValidateIP(ip string) error {
 	return fmt.Errorf("invalid IP address (neither valid IPv4 nor IPv6)")
 }
 
+// ValidateComment checks that a comment does not contain newlines or control
+// characters that could break out of the managed block or inject malicious content.
+func ValidateComment(comment string) error {
+	for i := 0; i < len(comment); i++ {
+		c := comment[i]
+		// Reject newline (\n, \r) and all ASCII control characters (0x00-0x1F, 0x7F)
+		if c == '\n' || c == '\r' || c < 0x20 || c == 0x7F {
+			return fmt.Errorf("comment contains invalid control character at position %d", i)
+		}
+	}
+	return nil
+}
+
 // ValidateNoDuplicates returns the first duplicate hostname/alias collision
 // across enabled entries. Case-insensitive (v1 parity). Disabled entries are
 // ignored entirely.

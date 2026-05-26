@@ -206,6 +206,50 @@ func TestValidateIP(t *testing.T) {
 	}
 }
 
+func TestValidateComment(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errSub  string
+	}{
+		// Valid comments
+		{"empty", "", false, ""},
+		{"simple", "production server", false, ""},
+		{"with_punctuation", "server-01 (backup)", false, ""},
+		{"unicode", "测试服务器", false, ""},
+		{"spaces", "   leading and trailing   ", false, ""},
+		
+		// Invalid: newlines
+		{"newline_lf", "line1\nline2", true, "control character"},
+		{"newline_cr", "line1\rline2", true, "control character"},
+		{"newline_crlf", "line1\r\nline2", true, "control character"},
+		
+		// Invalid: control characters
+		{"null_byte", "test\x00injection", true, "control character"},
+		{"tab", "test\tinjection", true, "control character"},
+		{"bell", "test\x07injection", true, "control character"},
+		{"escape", "test\x1binjection", true, "control character"},
+		{"delete", "test\x7finjection", true, "control character"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateComment(tc.input)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error for %q, got nil", tc.input)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("expected no error for %q, got %v", tc.input, err)
+			}
+			if tc.wantErr && tc.errSub != "" && !strings.Contains(err.Error(), tc.errSub) {
+				t.Fatalf("expected error containing %q, got %v", tc.errSub, err)
+			}
+		})
+	}
+}
+
 func TestValidateNoDuplicates(t *testing.T) {
 	cases := []struct {
 		name    string
