@@ -17,12 +17,21 @@ When `apply.Runner.writeEtcHosts` detects that the current process cannot write 
 
 ```
 hostie apply (uid=user)
-  └─> WritePayloadToTempfile (renders managed block to $TMPDIR/hostie-payload-<random>)
-       perms 0600, owner=user
-  └─> ReexecWithSudo: sudo <real-binary-path> <orig argv...>
+  └─> apply.Runner.PrepareSudoHandoff
+       ├─> WriteHostsFile (~/.hosts; D13 — independent of /etc/hosts side)
+       ├─> render.RenderManagedBlock — produces the bytes between BEGIN/END markers
+       └─> WritePayloadToTempfile (managed-block bytes only, $TMPDIR/hostie-payload-<random>)
+            perms 0600, owner=user
+  └─> ReexecWithSudo / SudoApplyCmd: sudo <real-binary-path> __apply-privileged --payload-path=<f> --owner-uid=<uid>
        └─> sudo prompts for password, spawns child with uid=0
-            └─> hostie __apply-privileged <payload-path>   (uid=0)
-                 ├─> ValidatePayloadFile: ownership/perms/marker checks
+            └─> hostie __apply-privileged --payload-path=… --owner-uid=…   (uid=0)
+                 ├─> ValidatePayloadFile: ownership/perms checks + marker invariants
+                 │     (exactly one BEGIN, exactly one END, BEGIN before END,
+                 │      no preamble or suffix bytes)
+                 ├─> ReadFile(/etc/hosts) — UNDER ROOT
+                 ├─> etchosts.ReplaceManagedBlock(etcContent, payload)
+                 │     re-derives the merge under root's view of /etc/hosts;
+                 │     un-managed regions are preserved byte-for-byte.
                  ├─> WriteEtcHosts (atomic temp+rename)
                  └─> os.Remove(payloadPath)   (deferred, runs on all exit paths)
 ```
@@ -73,14 +82,18 @@ The **most important boundary** is **sudo → privileged hostie**: every input c
 
 ### 3.3. Malicious payload contents
 
-**Attack**: An attacker who gained write access to the tempfile (despite the protections above) inserts shell metacharacters or extra hostie markers into the managed block to try to corrupt `/etc/hosts` outside the managed region.
+**Attack**: An attacker who gained write access to the tempfile (despite the protections above) inserts shell metacharacters, garbage bytes outside the managed region, or extra/malformed hostie markers into the payload to try to corrupt `/etc/hosts` outside the managed region.
 
 **Mitigations**:
-- `ValidatePayloadFile` requires the content to start with `#` (comment marker).
+- `ValidatePayloadFile` enforces a strict marker invariant before the privileged subcommand performs any merge:
+  - Payload must contain exactly one `# BEGIN HOSTIE` line and exactly one `# END HOSTIE` line, with BEGIN appearing strictly before END.
+  - Payload must contain **only** the managed block — no bytes before BEGIN, no bytes after END.
+  - The check reuses `etchosts.ExtractManagedBlock` so "what the receiver accepts" is pinned to "what the parser splits" (one parser, no drift — critical-patterns §17).
+- The privileged subcommand **re-derives the merge under root**: it reads `/etc/hosts` itself, calls `etchosts.ReplaceManagedBlock(currentEtcContent, payloadBytes)`, and writes the result atomically. The unprivileged TUI never controls the bytes outside the markers.
 - `etchosts.ReplaceManagedBlock` operates on byte ranges between known BEGIN/END markers — it does not interpret payload content; it only substitutes the block.
-- The payload bytes are written verbatim; there is no shell interpolation anywhere in the path.
+- The payload bytes are written verbatim into the managed region; there is no shell interpolation anywhere in the path.
 
-**Residual risk**: Garbage inside the managed block is possible, but it cannot escape the managed region. Worst case: `/etc/hosts` parses oddly until the next `hostie apply` overwrites it.
+**Residual risk**: Garbage *inside* the managed block is possible, but it cannot escape the managed region. Worst case: `/etc/hosts` parses oddly until the next `hostie apply` overwrites it. The pre-existing TOCTOU window between the unprivileged TUI's `/etc/hosts` read and the privileged write is **closed** by this design: the privileged process reads `/etc/hosts` itself, so any concurrent edit to the un-managed region by another root tool is preserved.
 
 ### 3.4. Argument injection via `os.Args` forwarding
 
@@ -182,8 +195,8 @@ Never grant sudo access to `hostie __apply-privileged` directly. That command is
 
 The privilege flow is covered by:
 
-- **Unit tests**: `go/internal/apply/privilege_test.go` (if present) covers `WritePayloadToTempfile`, `ValidatePayloadFile` permission and ownership checks.
-- **CLI integration tests**: `go/internal/cmd/integration_test.go` overrides `apply.ETC_HOSTS_PATH` to a temp directory so the apply flow runs without sudo. The privileged code path is not exercised in CI (would require interactive sudo).
+- **Unit tests**: `go/internal/apply/privilege_test.go` covers `ValidatePayloadFile` marker invariants (missing BEGIN/END, duplicates, end-before-begin, preamble/suffix bytes rejected). `go/internal/apply/runner_test.go` covers `PrepareSudoHandoff` (~/.hosts write, payload-only-managed-block invariant) and the conformance pin `TestApply_DirectAndSudoPathsProduceIdenticalEtc` — direct and sudo paths must produce byte-identical /etc/hosts for the same fixture (critical-patterns §17).
+- **CLI integration tests**: `go/internal/cmd/apply_privileged_test.go` covers the hidden subcommand's uid/permission/marker validation and the under-root re-derived merge. `go/internal/cmd/integration_test.go` overrides `apply.ETC_HOSTS_PATH` to a temp directory so the apply flow runs without sudo. The interactive privileged code path (sudo password prompt) is not exercised in CI.
 - **Manual smoke**: `hostie apply` against a writable /etc/hosts (as root, or with appropriate perms) is part of the release smoke checklist.
 
 Future work: extend the test harness to fake the sudo reexec (e.g. by injecting a script in PATH that simulates sudo) to cover the round-trip in CI.

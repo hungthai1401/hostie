@@ -78,7 +78,25 @@ var applyPrivilegedCmd = &cobra.Command{
 			}
 		}()
 
-		if err := etchosts.WriteEtcHosts(apply.ETC_HOSTS_PATH, string(content)); err != nil {
+		// Threat-model §3.3: the privileged side re-derives the /etc/hosts
+		// merge. The payload contains ONLY the rendered managed block
+		// (asserted by ValidatePayloadFile above); we read /etc/hosts here
+		// under root and call etchosts.ReplaceManagedBlock to splice the
+		// payload between the BEGIN/END markers. This closes the TOCTOU
+		// window between the unprivileged TUI's read and the privileged
+		// write — any concurrent edit to the un-managed region of
+		// /etc/hosts is preserved, and the unprivileged TUI never controls
+		// the bytes outside its own managed block.
+		etcContent, err := os.ReadFile(apply.ETC_HOSTS_PATH)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to read /etc/hosts: %w", err)
+		}
+		merged, err := etchosts.ReplaceManagedBlock(etcContent, content)
+		if err != nil {
+			return fmt.Errorf("failed to merge managed block: %w", err)
+		}
+
+		if err := etchosts.WriteEtcHosts(apply.ETC_HOSTS_PATH, string(merged)); err != nil {
 			return fmt.Errorf("failed to write /etc/hosts: %w", err)
 		}
 

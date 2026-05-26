@@ -38,7 +38,11 @@ func writePayload(t *testing.T, dir, name string, mode os.FileMode, content stri
 // root into copying an attacker-controlled payload into /etc/hosts. These
 // table cases lock down the negative paths and the happy path.
 func TestApplyPrivileged(t *testing.T) {
-	validBody := "# hostie managed block\n127.0.0.1 example.test\n"
+	// Payloads handed to __apply-privileged must contain ONLY the rendered
+	// managed block (BEGIN/END markers + entries between). The privileged
+	// side re-derives the merge against /etc/hosts under root — see
+	// threat-model §3.3 and apply.ValidatePayloadFile.
+	validBody := "# BEGIN HOSTIE\n127.0.0.1 example.test\n# END HOSTIE\n"
 	uid := os.Getuid()
 
 	type caseSpec struct {
@@ -120,9 +124,36 @@ func TestApplyPrivileged(t *testing.T) {
 			wantErrSubstr: "payload validation failed",
 		},
 		{
-			name: "validate fails: missing comment marker",
+			name: "validate fails: missing managed-block markers",
 			build: func(t *testing.T, dir string) (string, int) {
 				return writePayload(t, dir, "p", 0o600, "no marker here\n"), uid
+			},
+			wantErr:       true,
+			wantErrSubstr: "payload validation failed",
+		},
+		{
+			name: "validate fails: payload has bytes outside markers",
+			build: func(t *testing.T, dir string) (string, int) {
+				body := "leading garbage\n# BEGIN HOSTIE\n127.0.0.1 example.test\n# END HOSTIE\n"
+				return writePayload(t, dir, "p", 0o600, body), uid
+			},
+			wantErr:       true,
+			wantErrSubstr: "payload validation failed",
+		},
+		{
+			name: "validate fails: duplicate BEGIN markers",
+			build: func(t *testing.T, dir string) (string, int) {
+				body := "# BEGIN HOSTIE\n# BEGIN HOSTIE\n# END HOSTIE\n"
+				return writePayload(t, dir, "p", 0o600, body), uid
+			},
+			wantErr:       true,
+			wantErrSubstr: "payload validation failed",
+		},
+		{
+			name: "validate fails: END before BEGIN",
+			build: func(t *testing.T, dir string) (string, int) {
+				body := "# END HOSTIE\n# BEGIN HOSTIE\n"
+				return writePayload(t, dir, "p", 0o600, body), uid
 			},
 			wantErr:       true,
 			wantErrSubstr: "payload validation failed",

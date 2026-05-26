@@ -34,9 +34,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hungthai1401/hostie/go/internal/apply"
-	"github.com/hungthai1401/hostie/go/internal/core/etchosts"
-	"github.com/hungthai1401/hostie/go/internal/core/fileio"
-	"github.com/hungthai1401/hostie/go/internal/core/render"
 	"github.com/hungthai1401/hostie/go/internal/domain"
 	"github.com/hungthai1401/hostie/go/internal/tui/store"
 )
@@ -57,11 +54,6 @@ var sudoApplyCmdFn = SudoApplyCmd
 // path so the test binary's location does not leak into assertions.
 var resolveSelfExeFn = apply.ResolveSelfExe
 
-// writePayloadTempfileFn is the indirection point for the 0600 tempfile
-// creation. Production wires apply.WritePayloadToTempfile; tests override it
-// to observe the payload bytes and avoid disk I/O.
-var writePayloadTempfileFn = apply.WritePayloadToTempfile
-
 // withCanWriteEtcHosts is a test-only helper that swaps canWriteEtcHostsFn
 // for the duration of a test and returns a restore function suitable for
 // t.Cleanup.
@@ -80,11 +72,17 @@ func withCanWriteEtcHosts(canWrite bool) (restore func()) {
 //
 // Returned Cmd is never nil: even the failure-to-render path yields a Cmd
 // that posts an ApplyResultMsg{Err: ...} so the status bar can report it.
+//
+// hostsPath is retained on the API for symmetry with prior versions but the
+// sudo path no longer uses it directly — the runner owns the ~/.hosts path
+// it was constructed with (see apply.NewRunner). The parameter remains for
+// future direct-path callers that may need it.
 func applyCmdDispatch(runner applyRunner, hostsFile domain.HostsFile, hostsPath string) tea.Cmd {
+	_ = hostsPath
 	if canWriteEtcHostsFn() {
 		return applyCmd(runner, hostsFile)
 	}
-	return sudoApplyDispatch(hostsFile, hostsPath)
+	return sudoApplyDispatch(runner, hostsFile)
 }
 
 // sudoPendingMsg is delivered after sudoApplyDispatch finishes its
@@ -118,52 +116,43 @@ type sudoPendingMsg struct {
 // a sudoPendingMsg. The actual tea.ExecProcess Cmd is delivered to Update via
 // the message rather than returned from this function because:
 //
-//   - Rendering the managed block, reading /etc/hosts, and writing ~/.hosts
-//     all block on disk I/O; we want them off the UI goroutine.
+//   - Rendering the managed block and writing ~/.hosts both block on disk
+//     I/O; we want them off the UI goroutine.
 //   - tea.ExecProcess must be a synchronous return value from Update so the
 //     bubbletea runtime can call ReleaseTerminal in the same tick. Update
 //     does that synchronous return when it receives sudoPendingMsg.
 //
-// The hostsPath is needed to write ~/.hosts (D13 step 1). Pass the same path
-// the Model was constructed with.
-func sudoApplyDispatch(hostsFile domain.HostsFile, hostsPath string) tea.Cmd {
+// All managed-block rendering, ~/.hosts writes, and payload-tempfile
+// creation are delegated to runner.PrepareSudoHandoff (apply.Runner). The
+// payload contains ONLY the rendered managed block with markers — the
+// privileged subcommand re-reads /etc/hosts under root and re-derives the
+// merge, restoring threat-model §3.3.
+//
+// This package no longer imports core/etchosts, core/fileio, or core/render;
+// the merge happens entirely in the privileged child.
+func sudoApplyDispatch(runner applyRunner, hostsFile domain.HostsFile) tea.Cmd {
 	return func() tea.Msg {
-		// Step 1 (D13): write ~/.hosts first; YAML stays on disk even if
-		// the /etc/hosts side fails.
-		if err := fileio.WriteHostsFile(hostsPath, hostsFile); err != nil {
-			return sudoPendingMsg{err: fmt.Errorf("write %s: %w", hostsPath, err)}
+		if runner == nil {
+			return sudoPendingMsg{err: fmt.Errorf("apply runner not configured")}
 		}
 
-		// Step 2: render the new managed block in-process.
-		newBlock := render.RenderManagedBlock(&hostsFile)
-
-		// Step 3: build the full /etc/hosts contents (preamble + new block
-		// + suffix). The privileged subcommand will overwrite /etc/hosts
-		// with these bytes — we cannot defer the merge to the child
-		// because the child only sees the payload tempfile.
-		currentContent, err := os.ReadFile(apply.ETC_HOSTS_PATH)
-		if err != nil && !os.IsNotExist(err) {
-			return sudoPendingMsg{err: fmt.Errorf("read /etc/hosts: %w", err)}
-		}
-		newContent, err := etchosts.ReplaceManagedBlock(currentContent, []byte(newBlock))
+		// Delegate ~/.hosts write + managed-block render + payload tempfile
+		// creation to the runner. The runner owns the hostsPath it was
+		// constructed with (D14: TUI runner is dryRun=false, hostsPath
+		// fixed at NewModel time).
+		payloadPath, cleanup, err := runner.PrepareSudoHandoff(hostsFile)
 		if err != nil {
-			return sudoPendingMsg{err: fmt.Errorf("merge managed block: %w", err)}
+			return sudoPendingMsg{err: err}
 		}
 
-		// Step 4: write payload to 0600 tempfile under $TMPDIR.
-		payloadPath, cleanup, err := writePayloadTempfileFn(newContent)
-		if err != nil {
-			return sudoPendingMsg{err: fmt.Errorf("create payload tempfile: %w", err)}
-		}
-
-		// Step 5: resolve self exe.
+		// Resolve self exe for the sudo argv.
 		exePath, err := resolveSelfExeFn()
 		if err != nil {
 			cleanup()
 			return sudoPendingMsg{err: fmt.Errorf("resolve self exe: %w", err)}
 		}
 
-		// Step 6: build the tea.Cmd that wraps tea.ExecProcess.
+		// Build the tea.Cmd that wraps tea.ExecProcess.
 		exeCmd := sudoApplyCmdFn(exePath, payloadPath, os.Getuid())
 		return sudoPendingMsg{exeCmd: exeCmd, cleanup: cleanup}
 	}

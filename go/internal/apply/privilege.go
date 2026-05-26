@@ -11,6 +11,8 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/hungthai1401/hostie/go/internal/core/etchosts"
 )
 
 const (
@@ -167,15 +169,31 @@ func ValidatePayloadFile(path string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read payload file: %w", err)
 	}
 
-	// Basic validation: must contain hostie markers
-	contentStr := string(content)
-	if len(contentStr) == 0 {
+	// Basic validation: payload must be non-empty
+	if len(content) == 0 {
 		return nil, fmt.Errorf("payload file is empty")
 	}
 
-	// Must contain BEGIN marker (basic sanity check)
-	if len(contentStr) > 0 && contentStr[0] != '#' {
-		return nil, fmt.Errorf("payload does not start with comment marker")
+	// Marker invariant (threat-model §3.3): the payload MUST be a rendered
+	// managed block with exactly one BEGIN marker, exactly one END marker,
+	// and BEGIN strictly before END. The privileged side re-derives the
+	// /etc/hosts merge from this block — it does NOT write the bytes
+	// verbatim — so garbage cannot escape the managed region even if the
+	// unprivileged side (or an attacker holding the tempfile) misbehaves.
+	//
+	// Marker lines are matched full-line after right-trimming ASCII
+	// whitespace, matching etchosts.ExtractManagedBlock's parser. We reuse
+	// ExtractManagedBlock here so "what the receiver accepts" is pinned to
+	// "what the parser splits" — a single seam, no drift.
+	preamble, managed, suffix, err := etchosts.ExtractManagedBlock(content)
+	if err != nil {
+		return nil, fmt.Errorf("payload marker validation failed: %w", err)
+	}
+	if managed == nil {
+		return nil, fmt.Errorf("payload does not contain hostie managed block markers")
+	}
+	if len(preamble) != 0 || len(suffix) != 0 {
+		return nil, fmt.Errorf("payload must contain ONLY the managed block (no preamble or suffix bytes)")
 	}
 
 	return content, nil

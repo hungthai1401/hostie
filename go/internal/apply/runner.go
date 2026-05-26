@@ -135,3 +135,44 @@ func RenderPreview(hostsFile domain.HostsFile) string {
 func MarshalHostsFile(hostsFile domain.HostsFile) ([]byte, error) {
 	return yaml.Marshal(&hostsFile)
 }
+
+// PrepareSudoHandoff is the unprivileged-side prep step for the TUI sudo
+// branch. It performs everything that does NOT require root:
+//
+//  1. Writes ~/.hosts (D13: YAML stays on disk even if the /etc/hosts side
+//     later fails).
+//  2. Renders the managed block via render.RenderManagedBlock — the same
+//     renderer the direct path uses, so the two paths produce identical
+//     bytes (the "one renderer" pin from critical-patterns §17).
+//  3. Writes the rendered managed block (with BEGIN/END markers) to a
+//     0600 tempfile under $TMPDIR via WritePayloadToTempfile.
+//
+// Critically, the payload is ONLY the managed block. The merge against the
+// current /etc/hosts is NOT performed here. The privileged subcommand
+// (__apply-privileged) re-reads /etc/hosts under root and runs
+// etchosts.ReplaceManagedBlock itself, restoring the threat-model §3.3
+// invariant that "garbage cannot escape the managed region": the
+// unprivileged side controls only the bytes inside the markers, never the
+// surrounding /etc/hosts content.
+//
+// Returns the payload path (for handoff to SudoApplyCmd), a cleanup closure
+// that the caller MUST invoke on every exit path, and an error. On error
+// the cleanup will be nil and no tempfile is left behind.
+func (r *Runner) PrepareSudoHandoff(hostsFile domain.HostsFile) (string, func(), error) {
+	// Step 1 (D13): write ~/.hosts first; YAML stays on disk even if the
+	// /etc/hosts side fails.
+	if err := fileio.WriteHostsFile(r.hostsFilePath, hostsFile); err != nil {
+		return "", nil, fmt.Errorf("write %s: %w", r.hostsFilePath, err)
+	}
+
+	// Step 2: render the managed block. Same renderer the direct path uses.
+	managedBlock := render.RenderManagedBlock(&hostsFile)
+
+	// Step 3: write ONLY the managed block bytes (with markers) to a 0600
+	// tempfile. The privileged side will merge this into /etc/hosts.
+	payloadPath, cleanup, err := WritePayloadToTempfile([]byte(managedBlock))
+	if err != nil {
+		return "", nil, fmt.Errorf("create payload tempfile: %w", err)
+	}
+	return payloadPath, cleanup, nil
+}

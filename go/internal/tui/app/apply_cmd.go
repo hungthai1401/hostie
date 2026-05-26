@@ -51,6 +51,12 @@ import (
 // internals of the apply package.
 type applyRunner interface {
 	Apply(hostsFile domain.HostsFile) (*apply.ApplyResult, error)
+	// PrepareSudoHandoff is invoked by the sudo branch (sudoApplyDispatch).
+	// Returns a payload tempfile path containing ONLY the rendered managed
+	// block bytes (with markers) plus a cleanup closure the caller must
+	// invoke on every exit path. The merge into /etc/hosts is performed by
+	// the privileged subcommand, NOT here — see threat-model §3.3.
+	PrepareSudoHandoff(hostsFile domain.HostsFile) (string, func(), error)
 }
 
 // ApplyResultMsg is the message yielded by applyCmd once apply.Runner.Apply

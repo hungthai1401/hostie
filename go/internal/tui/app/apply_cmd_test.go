@@ -42,6 +42,13 @@ type fakeApplyRunner struct {
 	last   domain.HostsFile
 	result *apply.ApplyResult
 	err    error
+
+	// PrepareSudoHandoff fake state.
+	prepareCalls   int
+	prepareLast    domain.HostsFile
+	preparePath    string // path to return
+	prepareErr     error
+	prepareCleanup func() // cleanup closure to return; if nil a no-op is supplied
 }
 
 func (f *fakeApplyRunner) Apply(hf domain.HostsFile) (*apply.ApplyResult, error) {
@@ -50,6 +57,21 @@ func (f *fakeApplyRunner) Apply(hf domain.HostsFile) (*apply.ApplyResult, error)
 	f.calls++
 	f.last = hf
 	return f.result, f.err
+}
+
+func (f *fakeApplyRunner) PrepareSudoHandoff(hf domain.HostsFile) (string, func(), error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.prepareCalls++
+	f.prepareLast = hf
+	if f.prepareErr != nil {
+		return "", nil, f.prepareErr
+	}
+	cleanup := f.prepareCleanup
+	if cleanup == nil {
+		cleanup = func() {}
+	}
+	return f.preparePath, cleanup, nil
 }
 
 // drainApplyResult invokes a Cmd and asserts it produced an ApplyResultMsg.

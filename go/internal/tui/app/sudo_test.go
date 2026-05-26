@@ -33,18 +33,20 @@ import (
 	"github.com/hungthai1401/hostie/go/internal/tui/store"
 )
 
-// stubSudoDeps installs in-memory replacements for the four package-level
-// indirection points used by the sudo branch. Returns a single restore
-// closure suitable for t.Cleanup. observed is populated as the stubs run.
+// stubSudoDeps installs in-memory replacements for the package-level
+// indirection points used by the sudo branch. Returns a sudoObservation
+// populated as the stubs run. Note that the payload-tempfile and ~/.hosts
+// writes now happen inside the applyRunner (via PrepareSudoHandoff) — the
+// fakeApplyRunner set on the Model is the stub for those concerns. This
+// helper only stubs the two TUI-layer indirections that remain:
+// canWriteEtcHostsFn, resolveSelfExeFn, and sudoApplyCmdFn.
 type sudoObservation struct {
-	payloadWrites int
-	payloadBytes  []byte
-	cleanupCalls  int
-	sudoCmdCalls  int
-	lastExe       string
-	lastPayload   string
-	lastUID       int
-	sudoMsg       tea.Msg // message returned by the fake sudo Cmd
+	cleanupCalls int
+	sudoCmdCalls int
+	lastExe      string
+	lastPayload  string
+	lastUID      int
+	sudoMsg      tea.Msg // message returned by the fake sudo Cmd
 }
 
 func stubSudoDeps(t *testing.T, canWrite bool, sudoMsg tea.Msg) *sudoObservation {
@@ -52,21 +54,10 @@ func stubSudoDeps(t *testing.T, canWrite bool, sudoMsg tea.Msg) *sudoObservation
 	obs := &sudoObservation{sudoMsg: sudoMsg}
 
 	prevCan := canWriteEtcHostsFn
-	prevWrite := writePayloadTempfileFn
 	prevResolve := resolveSelfExeFn
 	prevSudo := sudoApplyCmdFn
 
 	canWriteEtcHostsFn = func() bool { return canWrite }
-	writePayloadTempfileFn = func(payload []byte) (string, func(), error) {
-		obs.payloadWrites++
-		obs.payloadBytes = append([]byte(nil), payload...)
-		// Return a real tempfile path under $TMPDIR so any downstream
-		// containment check (BuildSudoCmd) would accept it — but we replace
-		// SudoApplyCmd too, so the path is never actually exec'd.
-		path := filepath.Join(os.TempDir(), "hostie-stub-payload-test")
-		cleanup := func() { obs.cleanupCalls++ }
-		return path, cleanup, nil
-	}
 	resolveSelfExeFn = func() (string, error) {
 		return "/usr/local/bin/hostie-stub", nil
 	}
@@ -80,11 +71,24 @@ func stubSudoDeps(t *testing.T, canWrite bool, sudoMsg tea.Msg) *sudoObservation
 
 	t.Cleanup(func() {
 		canWriteEtcHostsFn = prevCan
-		writePayloadTempfileFn = prevWrite
 		resolveSelfExeFn = prevResolve
 		sudoApplyCmdFn = prevSudo
 	})
 	return obs
+}
+
+// stubbedSudoRunner returns a fakeApplyRunner pre-wired for the sudo path:
+// PrepareSudoHandoff returns a stub payload path and a cleanup that
+// increments the supplied observation. Use this with stubSudoDeps when a
+// test needs to drive sudoApplyDispatch end-to-end.
+func stubbedSudoRunner(t *testing.T, obs *sudoObservation) *fakeApplyRunner {
+	t.Helper()
+	path := filepath.Join(os.TempDir(), "hostie-stub-payload-test")
+	return &fakeApplyRunner{
+		result:         &apply.ApplyResult{Changed: true, Message: "ok"},
+		preparePath:    path,
+		prepareCleanup: func() { obs.cleanupCalls++ },
+	}
 }
 
 // seedSudoModel returns a Model with a hosts file loaded and a fake apply
@@ -141,7 +145,12 @@ func TestApplyCmdDispatch_CanWriteFalse_TakesSudoPath(t *testing.T) {
 	dir := t.TempDir()
 	hostsPath := filepath.Join(dir, "hosts.yaml")
 
-	fake := &fakeApplyRunner{result: &apply.ApplyResult{Changed: true, Message: "ok"}}
+	stubPath := filepath.Join(os.TempDir(), "hostie-stub-payload-test")
+	fake := &fakeApplyRunner{
+		result:         &apply.ApplyResult{Changed: true, Message: "ok"},
+		preparePath:    stubPath,
+		prepareCleanup: func() { obs.cleanupCalls++ },
+	}
 	cmd := applyCmdDispatch(fake, *fixture(), hostsPath)
 	require.NotNil(t, cmd)
 
@@ -153,14 +162,17 @@ func TestApplyCmdDispatch_CanWriteFalse_TakesSudoPath(t *testing.T) {
 	require.NotNil(t, pending.cleanup)
 
 	require.Equal(t, 0, fake.calls, "sudo path must NOT invoke runner.Apply")
-	require.Equal(t, 1, obs.payloadWrites, "sudo path must write a payload tempfile")
+	require.Equal(t, 1, fake.prepareCalls, "sudo path must invoke runner.PrepareSudoHandoff")
+	require.Equal(t, stubPath, obs.lastPayload, "SudoApplyCmd must receive the runner-supplied payload path")
 	require.Equal(t, "/usr/local/bin/hostie-stub", obs.lastExe)
 	require.Equal(t, os.Getuid(), obs.lastUID)
 
-	// ~/.hosts must have been written even though we never reach the privileged
-	// subcommand (D13 — YAML write is independent).
+	// ~/.hosts write is now the runner's responsibility (verified
+	// in TestRunner_PrepareSudoHandoff_WritesHostsAndPayload). Here we only
+	// assert the TUI-layer wiring: the runner was invoked. The fake does
+	// not touch the filesystem, so hostsPath remains absent.
 	_, err := os.Stat(hostsPath)
-	require.NoError(t, err, "sudo prep must write ~/.hosts before tea.ExecProcess")
+	require.True(t, os.IsNotExist(err), "fake runner does not touch ~/.hosts; real runner is covered by apply tests")
 }
 
 // -----------------------------------------------------------------------------
@@ -276,6 +288,7 @@ func TestApplyTrigger_SudoPath_EndToEnd(t *testing.T) {
 	obs := stubSudoDeps(t, false, SudoFinishedMsg{ExitCode: 0})
 
 	m := seedSudoModel(t)
+	m = m.WithApplyRunner(stubbedSudoRunner(t, obs))
 	m.store.MarkDirty()
 
 	// Step 1: ApplyTriggerMsg → cmd that yields sudoPendingMsg.
@@ -324,6 +337,7 @@ func TestApplyTrigger_SudoPath_FailurePreservesDirty(t *testing.T) {
 	})
 
 	m := seedSudoModel(t)
+	m = m.WithApplyRunner(stubbedSudoRunner(t, obs))
 	m.store.MarkDirty()
 
 	m2, cmd := m.Update(ApplyTriggerMsg{})
