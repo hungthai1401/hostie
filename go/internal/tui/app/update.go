@@ -78,10 +78,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleHostsLoaded seeds the store on successful load. On error, the
-// store stays at its empty default and a red status banner reports the
-// failure so the operator sees something on the first frame instead of
-// an empty TUI with no explanation.
+// handleHostsLoaded seeds the store on successful load and pre-selects
+// the first group + first visible entry so the operator sees a focused
+// cursor immediately. Pre-fix, the boot frame showed no highlight in
+// either pane and j/k had to be pressed before anything became visible.
+// On error, the store stays at its empty default and a red status banner
+// reports the failure so the operator sees something on the first frame
+// instead of an empty TUI with no explanation.
 func (m Model) handleHostsLoaded(msg hostsLoadedMsg) Model {
 	if msg.err != nil {
 		m.store.SetStatusMessage("Failed to load hosts file: "+msg.err.Error(), store.StatusError)
@@ -91,6 +94,18 @@ func (m Model) handleHostsLoaded(msg hostsLoadedMsg) Model {
 	// HostsFile so the store's internal pointer survives msg leaving scope.
 	hf := msg.file
 	m.store.LoadHostsFile(&hf)
+
+	// Boot seeding: highlight the first top-level group in the sidebar
+	// and the first entry of the visible group in main, so the TUI is
+	// immediately interactive without needing a priming keystroke.
+	if len(hf.Groups) > 0 && len(m.store.SelectedGroupPath()) == 0 {
+		m.store.SelectGroup([]string{hf.Groups[0].Name})
+	}
+	if m.store.SelectedEntryID() == "" {
+		if visible := visibleEntries(hf.Groups, m.store.SelectedGroupPath()); len(visible) > 0 {
+			m.store.SelectEntry(visible[0].ID)
+		}
+	}
 	return m
 }
 
@@ -128,10 +143,27 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		return m.handleTab(), nil
 
-	case "j", "down":
+	case "h":
+		// Direct pane jump: from Main, h focuses the sidebar. From
+		// Sidebar it's a no-op (no pane left of the sidebar). Lets the
+		// operator navigate without alternating Tab presses.
+		if m.focus == FocusMain {
+			return m.focusSidebar(), nil
+		}
+		return m, nil
+
+	case "l":
+		// Direct pane jump: from Sidebar, l focuses Main. From Main
+		// it's a no-op.
+		if m.focus == FocusSidebar {
+			return m.focusMain(), nil
+		}
+		return m, nil
+
+	case "j":
 		return m.handleNavigate(+1), nil
 
-	case "k", "up":
+	case "k":
 		return m.handleNavigate(-1), nil
 
 	case "/":
@@ -178,19 +210,52 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleTab swaps focus between sidebar and main. When swapping into a
-// pane that has no current selection, we seed the selection to the first
-// item in that pane (matches v1 useKeyboard.ts Tab branch).
+// pane that has no current selection — or whose current selection is no
+// longer visible because the operator changed groups in the other pane —
+// we seed the selection to the first item in the now-focused pane.
+//
+// On Tab → Main we seed from the *visible* entries of the currently
+// selected group (visibleEntries), not from a flat traversal across all
+// groups. The Main pane only renders the selected group's entries, so a
+// selection that lives in another group is invisible (no highlight, j/k
+// appears to do nothing). This was the v1 behavior in spirit but the v1
+// hook was loose enough to often "just work"; the Go port needs to be
+// explicit. See also components/entrylist.go View which keys highlighting
+// off selectedID — if it doesn't appear in the rendered slice, the row
+// silently goes unhighlighted.
 func (m Model) handleTab() Model {
-	hf := m.store.HostsFile()
 	if m.focus == FocusSidebar {
-		m.focus = FocusMain
-		entries := flattenEntries(hf.Groups)
-		if len(entries) > 0 && m.store.SelectedEntryID() == "" {
-			m.store.SelectEntry(entries[0].ID)
-		}
+		return m.focusMain()
+	}
+	return m.focusSidebar()
+}
+
+// focusMain switches focus to the Main pane and re-seeds SelectedEntryID
+// to the first entry of the currently visible group when the prior
+// selection is no longer in view. This is the centralized helper used by
+// Tab, l/right-arrow, and any future "jump to main" path so the seeding
+// rule stays consistent.
+func (m Model) focusMain() Model {
+	m.focus = FocusMain
+	hf := m.store.HostsFile()
+	visible := visibleEntries(hf.Groups, m.store.SelectedGroupPath())
+	if len(visible) == 0 {
+		m.store.SelectEntry("")
 		return m
 	}
+	cur := m.store.SelectedEntryID()
+	if indexOfEntry(visible, cur) < 0 {
+		m.store.SelectEntry(visible[0].ID)
+	}
+	return m
+}
+
+// focusSidebar switches focus to the Sidebar pane, seeding the first
+// group when no group is currently selected. Used by Tab, h/left-arrow,
+// and Esc.
+func (m Model) focusSidebar() Model {
 	m.focus = FocusSidebar
+	hf := m.store.HostsFile()
 	paths := flattenGroupPaths(hf.Groups, nil)
 	if len(paths) > 0 && len(m.store.SelectedGroupPath()) == 0 {
 		m.store.SelectGroup(paths[0])
@@ -213,7 +278,7 @@ func (m Model) handleNavigate(step int) Model {
 		m.store.SelectGroup(paths[next])
 		return m
 	}
-	entries := flattenEntries(hf.Groups)
+	entries := visibleEntries(hf.Groups, m.store.SelectedGroupPath())
 	if len(entries) == 0 {
 		return m
 	}

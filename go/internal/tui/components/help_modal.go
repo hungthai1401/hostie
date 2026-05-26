@@ -50,7 +50,10 @@ var helpKeybindings = []helpCategory{
 		Bindings: []helpBinding{
 			{"j", "Move down"},
 			{"k", "Move up"},
+			{"h", "Focus sidebar"},
+			{"l", "Focus main"},
 			{"Tab", "Switch focus (sidebar ↔ main)"},
+			{"Esc", "Return to sidebar"},
 			{"/", "Enter search mode"},
 		},
 	},

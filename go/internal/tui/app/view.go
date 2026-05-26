@@ -48,7 +48,11 @@ func (m Model) View() string {
 	// StatusBar: store-driven (dirty marker, mode, query, status message).
 	status := m.statusBar.View(m.store)
 
-	base := m.layout.View(sidebar, main, status)
+	focusPane := components.FocusPaneMain
+	if m.focus == FocusSidebar {
+		focusPane = components.FocusPaneSidebar
+	}
+	base := m.layout.ViewFocused(sidebar, main, status, focusPane)
 	if m.modalHost != nil && m.modalHost.Active() {
 		return OverlayModal(base, m.modalHost.View(), m.width, m.height)
 	}

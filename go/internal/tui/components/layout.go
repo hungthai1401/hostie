@@ -93,11 +93,29 @@ func (l Layout) ContentHeight() int {
 	return h
 }
 
+// FocusPane identifies which pane the parent considers focused, so Layout
+// can render a visually distinct border. The zero value (FocusPaneNone)
+// renders the default neutral border on both panes.
+type FocusPane int
+
+const (
+	FocusPaneNone FocusPane = iota
+	FocusPaneSidebar
+	FocusPaneMain
+)
+
 // View composes the three pre-rendered pane contents into the final
 // frame string. Callers pass the already-rendered Sidebar (GroupTree),
 // Main (EntryList), and StatusBar views; Layout is responsible only for
 // sizing and joining.
 func (l Layout) View(sidebar, main, statusBar string) string {
+	return l.ViewFocused(sidebar, main, statusBar, FocusPaneNone)
+}
+
+// ViewFocused is View with an explicit focus indicator. The focused pane
+// gets a bright cyan border so the operator can see at a glance which pane
+// receives j/k/Tab. Callers without a focus model can keep using View.
+func (l Layout) ViewFocused(sidebar, main, statusBar string, focus FocusPane) string {
 	if l.width <= 0 || l.height <= 0 {
 		// No dimensions yet (pre-WindowSizeMsg). Fall back to a vertical
 		// stack so the operator still sees content during the first frame.
@@ -109,22 +127,40 @@ func (l Layout) View(sidebar, main, statusBar string) string {
 	mainWidth := l.MainWidth()
 
 	// Sidebar: fixed width minus its right border column; vertical
-	// separator on the right edge matches v1's borderRight Box.
+	// separator on the right edge matches v1's borderRight Box. When
+	// focused, the border color brightens so the operator sees which
+	// pane receives keystrokes.
+	sidebarBorder := lipgloss.NormalBorder()
 	sidebarStyle := lipgloss.NewStyle().
 		Width(maxInt(sidebarWidth-1, 1)).
 		Height(contentHeight).
-		BorderStyle(lipgloss.NormalBorder()).
+		BorderStyle(sidebarBorder).
 		BorderRight(true).
 		BorderTop(false).
 		BorderBottom(false).
 		BorderLeft(false)
+	if focus == FocusPaneSidebar {
+		sidebarStyle = sidebarStyle.BorderForeground(lipgloss.Color("39")) // cyan
+	}
 
 	// Main: remaining width minus a single column of left padding so
-	// the GroupTree and EntryList aren't visually glued together.
+	// the GroupTree and EntryList aren't visually glued together. When
+	// focused, render a left border in the focus color (the sidebar's
+	// right border becomes the visual separator otherwise).
 	mainStyle := lipgloss.NewStyle().
 		Width(maxInt(mainWidth-1, 1)).
 		Height(contentHeight).
 		PaddingLeft(1)
+	if focus == FocusPaneMain {
+		mainStyle = mainStyle.
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderLeft(true).
+			BorderTop(false).
+			BorderBottom(false).
+			BorderRight(false).
+			BorderForeground(lipgloss.Color("39")). // cyan
+			PaddingLeft(0)                          // border takes the column the padding occupied
+	}
 
 	// StatusBar: full width with a top border separating it from Main.
 	statusStyle := lipgloss.NewStyle().

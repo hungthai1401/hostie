@@ -67,6 +67,10 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyUp}
 	case "down":
 		return tea.KeyMsg{Type: tea.KeyDown}
+	case "left":
+		return tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		return tea.KeyMsg{Type: tea.KeyRight}
 	case "ctrl+c":
 		return tea.KeyMsg{Type: tea.KeyCtrlC}
 	default:
@@ -141,8 +145,14 @@ func TestInit_LoadFailure_SetsStatusMessage(t *testing.T) {
 }
 
 // TestNavigation_JKWrap_Main exercises j/k wrap in the Main pane.
-// Sequence: boot → j (entries[0]) → j (entries[1]) → j (entries[2]) →
-// j (wraps to entries[0]) → k (wraps to entries[2]).
+// The fixture's first group ("work") has 2 entries [e1, e2] and that's
+// what the Main pane shows when no group is explicitly selected.
+// Sequence: boot → j (e1) → j (e2) → j (wraps to e1) → k (wraps to e2).
+//
+// Navigation is now constrained to the *visible* group's entries (the
+// Main pane only renders one group at a time, per visibleEntries), so
+// e3 in the "personal" group is unreachable from here without first
+// selecting that group via the sidebar. See TestNavigation_VisibleGroup.
 func TestNavigation_JKWrap_Main(t *testing.T) {
 	m := seedModel(t)
 	// Initial state: no selection.
@@ -154,26 +164,27 @@ func TestNavigation_JKWrap_Main(t *testing.T) {
 	m3, _ := m2.Update(key("j"))
 	require.Equal(t, "e2", m3.(Model).Store().SelectedEntryID())
 
+	// Wrap forward: j at last (e2) → first (e1).
 	m4, _ := m3.Update(key("j"))
-	require.Equal(t, "e3", m4.(Model).Store().SelectedEntryID())
+	require.Equal(t, "e1", m4.(Model).Store().SelectedEntryID())
 
-	// Wrap forward: j at last → first.
-	m5, _ := m4.Update(key("j"))
-	require.Equal(t, "e1", m5.(Model).Store().SelectedEntryID())
-
-	// Wrap backward: k at first → last.
-	m6, _ := m5.Update(key("k"))
-	require.Equal(t, "e3", m6.(Model).Store().SelectedEntryID())
+	// Wrap backward: k at first (e1) → last (e2).
+	m5, _ := m4.Update(key("k"))
+	require.Equal(t, "e2", m5.(Model).Store().SelectedEntryID())
 }
 
-// TestNavigation_ArrowKeys verifies "up" and "down" are aliases for k/j
-// (the bubbles convention; future search-mode bead expects this parity).
-func TestNavigation_ArrowKeys(t *testing.T) {
+// TestNavigation_ArrowKeys_NoLongerBound verifies the arrow keys are not
+// wired to navigation — pure vim-style j/k/h/l only (per UAT request).
+// Esc remains bound (it's the explicit "return to sidebar" escape hatch).
+func TestNavigation_ArrowKeys_NoLongerBound(t *testing.T) {
 	m := seedModel(t)
-	m2, _ := m.Update(key("down"))
-	require.Equal(t, "e1", m2.(Model).Store().SelectedEntryID())
-	m3, _ := m2.Update(key("up"))
-	require.Equal(t, "e3", m3.(Model).Store().SelectedEntryID(), "up at top wraps to last")
+	before := m.Store().SelectedEntryID()
+	for _, k := range []string{"up", "down", "left", "right"} {
+		m2, cmd := m.Update(key(k))
+		require.Nil(t, cmd, "arrow %q must not produce a Cmd", k)
+		require.Equal(t, before, m2.(Model).Store().SelectedEntryID(),
+			"arrow %q must not move selection", k)
+	}
 }
 
 // TestNavigation_TabSwap verifies Tab toggles focus and, on entering an
@@ -193,6 +204,41 @@ func TestNavigation_TabSwap(t *testing.T) {
 	require.Equal(t, FocusMain, mm3.Focus())
 	// Main seeded to first entry.
 	require.Equal(t, "e1", mm3.Store().SelectedEntryID())
+}
+
+// TestNavigation_TabBackToMain_ReseedsForVisibleGroup verifies the fix
+// for the UAT regression where Tab→sidebar→select new group→Tab→main
+// left SelectedEntryID pointing at an entry that isn't in the visible
+// group, causing j/k to appear inert and `e`/`d` to operate on the
+// wrong entry. After the fix, Tab→main re-seeds selection to the first
+// entry of the currently visible group whenever the prior selection is
+// no longer in view.
+func TestNavigation_TabBackToMain_ReseedsForVisibleGroup(t *testing.T) {
+	m := seedModel(t)
+
+	// Step into "work" entries by pressing j (selects e1).
+	m2, _ := m.Update(key("j"))
+	m = m2.(Model)
+	require.Equal(t, "e1", m.Store().SelectedEntryID())
+
+	// Tab → sidebar (work selected by default seed).
+	m3, _ := m.Update(key("tab"))
+	m = m3.(Model)
+	require.Equal(t, FocusSidebar, m.Focus())
+
+	// j in sidebar → move to "personal" group.
+	m4, _ := m.Update(key("j"))
+	m = m4.(Model)
+	require.Equal(t, []string{"personal"}, m.Store().SelectedGroupPath())
+
+	// Tab → main. e1 is no longer visible (it lives in "work"), so the
+	// model must re-seed to "personal"'s first entry (e3). Pre-fix this
+	// stayed on e1, leaving Main with no highlight.
+	m5, _ := m.Update(key("tab"))
+	m = m5.(Model)
+	require.Equal(t, FocusMain, m.Focus())
+	require.Equal(t, "e3", m.Store().SelectedEntryID(),
+		"Tab→main must re-seed to first entry of visible group when prior selection is offscreen")
 }
 
 // TestNavigation_JKWrap_Sidebar exercises j/k wrap with focus on the
@@ -304,8 +350,10 @@ func TestView_QuittingRendersFarewell(t *testing.T) {
 func TestBootScenario_J3_Tab_Q(t *testing.T) {
 	m := seedModel(t)
 
-	// j×3 advances selection through e1, e2, e3.
-	for i, want := range []string{"e1", "e2", "e3"} {
+	// j×3 in Main pane: visible group "work" has [e1, e2]; the third j
+	// wraps back to e1 (was the bug surface — pre-fix this stepped into
+	// "personal"'s e3 even though e3 isn't visible in the Main pane).
+	for i, want := range []string{"e1", "e2", "e1"} {
 		var cmd tea.Cmd
 		var mm tea.Model
 		mm, cmd = m.Update(key("j"))
@@ -319,7 +367,7 @@ func TestBootScenario_J3_Tab_Q(t *testing.T) {
 	m = mm2.(Model)
 	require.Nil(t, cmd)
 	require.Equal(t, FocusSidebar, m.Focus())
-	require.Equal(t, "e3", m.Store().SelectedEntryID(), "Tab must not clear entry selection")
+	require.Equal(t, "e1", m.Store().SelectedEntryID(), "Tab must not clear entry selection")
 
 	// q quits cleanly.
 	mm3, cmd := m.Update(key("q"))
