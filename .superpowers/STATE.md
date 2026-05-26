@@ -1,8 +1,22 @@
 ## Current
-- **Skill:** swarming
+- **Skill:** reviewing
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** 2 (Core port) — complete, handoff to reviewing
+- **Phase:** 4 (TUI port) — gate-3 (presenting to user)
+
+## Phase 4 Review Findings (consolidated)
+- **Phase 1 (5 specialists)**: 4 P1, 12 P2, 17 P3 (after dedup). All beads created.
+- **Phase 2 (artifact verification)**: confirmed P1-C (? unwired). Added P1-E (Enter unwired) + P2 sudo-spike-findings-path. Both `?` and `Enter` advertised in HelpModal + contract but absent from update.go root key router. Status TTL also unwired (already a P2). 13 of 16 exit-state clauses ✅; phase-4-uat-log.md missing (clause 10, expected — deferred UAT bead); spike doc path mismatch (clause 11).
+- **P1 beads on epic close path (5)**:
+  1. `hosts-cli-review-p1-sudo-merge-boundary-bre` — TUI bypasses apply.Runner; merge moves to unprivileged process (threat model §3.3 broken)
+  2. `hosts-cli-review-p1-apply-bubbletea-dep-p40` — apply package imports bubbletea (Layer 4→6)
+  3. `hosts-cli-review-p1-help-keybind-unwired-8eu` — `?` not wired; test locks in L3 failure
+  4. `hosts-cli-review-p1-apply-privileged-untested-kl12` — zero tests for owner-uid validation
+  5. `hosts-cli-review-p1-enter-keybind-unwired-mgwe` — Enter not wired in Normal mode
+
+## Phase 4 Validating
+- **Scope:** Phase 4 only (fd23481..HEAD; 45 files, ~9.5K LOC under go/internal/tui/**, go/internal/apply/sudo_cmd*, go/internal/cmd/root.go, go/internal/cmd/apply_privileged.go)
+- **Diff artifact:** /var/folders/r_/8fplcy_s3q99qh8czt76dwpc0000gn/T/opencode/phase4-review/diff.patch
 
 ## Phase 2 Spike Closures (inline by orchestrator)
 - hosts-cli-go-mig-p2-atomic-spike-jdb: CLOSED (FINDINGS.md complete; deliverable IS the spike).
