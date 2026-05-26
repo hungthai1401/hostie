@@ -1,8 +1,8 @@
 ## Current
-- **Skill:** reviewing
+- **Skill:** compounding
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
-- **Phase:** 4 (TUI port) — gate-3 APPROVED; handoff to compounding
+- **Phase:** complete (Phase 4 learnings captured; 4 patterns promoted)
 
 ## Phase 4 P1 Fix Loop (inline)
 All 5 P1 review beads CLOSED in 4 commits (7e717fd, a6564bf, 701fe69, f5675f4):
