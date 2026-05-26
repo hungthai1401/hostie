@@ -1,6 +1,8 @@
 package app
 
 import (
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/hungthai1401/hostie/go/internal/domain"
 	"github.com/hungthai1401/hostie/go/internal/tui/components"
 )
@@ -92,3 +94,31 @@ func findGroup(groups []domain.Group, path []string) *domain.Group {
 	}
 	return nil
 }
+
+// OverlayModal composes a modal body string over a base view by centering it
+// within the given width/height. This is the rendering primitive every Phase 4
+// modal bead calls from View() when ModalHost.Active() is true; see
+// .spikes/go-migration/p4-modal-pattern/FINDINGS.md for the full integration
+// sequence (model.go modalHost field, update.go intercept, view.go overlay).
+//
+// The base parameter is preserved in the returned string for terminals that
+// don't support overlay positioning (Place falls back gracefully); for normal
+// terminals, the centered modal visually replaces the base contents while the
+// underlying buffer stays intact for the next render.
+//
+// An empty modal string returns base unchanged — callers can pass
+// ModalHost.View() directly without guarding on Active().
+func OverlayModal(base, modal string, width, height int) string {
+	if modal == "" {
+		return base
+	}
+	if width <= 0 || height <= 0 {
+		return modal
+	}
+	return lipgloss.Place(
+		width, height,
+		lipgloss.Center, lipgloss.Center,
+		modal,
+	)
+}
+

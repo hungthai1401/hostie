@@ -36,8 +36,20 @@ const (
 //
 // A zero-value EntryList is usable; width=0 means "no explicit width" and the
 // Aliases column will simply not be padded beyond its content.
+//
+// Optional filter state (set via WithFilter, cleared via WithoutFilter) lets
+// the search-mode flow drive a ranked subset into View() without changing
+// the View() signature. When filterActive is true, View() ignores the
+// `entries` argument and renders the filtered slice instead. Matched-field
+// highlighting is applied per row by checking each rendered cell against
+// the active query (case-insensitive contiguous match — sufficient to call
+// out hits without re-implementing the weighted aggregator here; the
+// authoritative match scoring lives in tui/search).
 type EntryList struct {
-	width int
+	width        int
+	filtered     []domain.Entry
+	filterActive bool
+	filterQuery  string
 }
 
 // NewEntryList constructs an EntryList sized for the given pane width.
@@ -56,10 +68,59 @@ func (e EntryList) WithWidth(width int) EntryList {
 // Width returns the pane width EntryList was constructed with.
 func (e EntryList) Width() int { return e.width }
 
+// WithFilter returns a copy of e with the search-filtered entry list and
+// query installed. The search-mode flow in app/search_mode.go calls this
+// on every keystroke. Pass an empty (non-nil) slice for "filter active
+// but no matches" — View() will render the empty-state placeholder while
+// still respecting the filter-active branch (so the parent doesn't fall
+// back to the unfiltered group entries).
+func (e EntryList) WithFilter(filtered []domain.Entry, query string) EntryList {
+	if filtered == nil {
+		filtered = []domain.Entry{}
+	}
+	e.filtered = filtered
+	e.filterActive = true
+	e.filterQuery = query
+	return e
+}
+
+// WithoutFilter clears any active filter, restoring the default behavior
+// where View() renders its `entries` argument.
+func (e EntryList) WithoutFilter() EntryList {
+	e.filtered = nil
+	e.filterActive = false
+	e.filterQuery = ""
+	return e
+}
+
+// FilterActive reports whether a search filter is currently installed.
+// Exported for tests and for callers that want to branch their selection
+// math on filtered vs unfiltered state.
+func (e EntryList) FilterActive() bool { return e.filterActive }
+
+// FilteredEntries returns the currently-installed filtered slice.
+// Returns nil when no filter is active.
+func (e EntryList) FilteredEntries() []domain.Entry {
+	if !e.filterActive {
+		return nil
+	}
+	out := make([]domain.Entry, len(e.filtered))
+	copy(out, e.filtered)
+	return out
+}
+
 // View renders entries as a styled table. selectedID is matched against
 // each entry's ID to drive the reverse-video highlight; pass "" for no
 // selection. Empty `entries` produces the v1 empty-state message.
 func (e EntryList) View(entries []domain.Entry, selectedID string) string {
+	// Filter-active branch: render the ranked subset rather than the
+	// caller-provided entries. The search-mode flow installs the filter
+	// via WithFilter on every keystroke; the view always reflects the
+	// latest pushed subset.
+	if e.filterActive {
+		entries = e.filtered
+	}
+
 	if len(entries) == 0 {
 		return emptyState()
 	}

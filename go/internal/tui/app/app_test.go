@@ -245,7 +245,7 @@ func TestQuit_CtrlCEquivalent(t *testing.T) {
 func TestUpdate_UnknownKey_IsNoOp(t *testing.T) {
 	m := seedModel(t)
 	before := m.Store().SelectedEntryID()
-	for _, k := range []string{"space", "d", "a", "e", "g", "m", "/", "?", "x"} {
+	for _, k := range []string{"space", "d", "a", "e", "g", "m", "?", "x"} {
 		m2, cmd := m.Update(key(k))
 		require.Nil(t, cmd, "unknown key %q must not produce a Cmd in the skeleton", k)
 		require.Equal(t, before, m2.(Model).Store().SelectedEntryID(),

@@ -63,7 +63,17 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 
 // handleKey is the navigation-only key router. Every branch returns the
 // updated Model; unknown keys fall through to a (m, nil) no-op.
+//
+// Mode-aware dispatch (added by bead hosts-cli-go-mig-p4-search-mode-n1c):
+// when the store reports Mode==Search, all key events are routed to
+// handleSearchKey (see search_mode.go) which owns the search input
+// capture loop. The navigation keys below only fire in Mode==Normal.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.store.Mode() == store.ModeSearch {
+		m2, cmd := m.handleSearchKey(msg)
+		return m2, cmd
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		// Skeleton-only: no dirty-check confirm. The app-mutations bead
@@ -79,6 +89,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "k", "up":
 		return m.handleNavigate(-1), nil
+
+	case "/":
+		// Enter search mode (port of v1 useKeyboard.ts '/' branch).
+		return m.enterSearchMode(), nil
 	}
 	return m, nil
 }

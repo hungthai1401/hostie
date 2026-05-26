@@ -34,6 +34,7 @@ import (
 	"github.com/hungthai1401/hostie/go/internal/core/fileio"
 	"github.com/hungthai1401/hostie/go/internal/domain"
 	"github.com/hungthai1401/hostie/go/internal/tui/components"
+	"github.com/hungthai1401/hostie/go/internal/tui/search"
 	"github.com/hungthai1401/hostie/go/internal/tui/store"
 )
 
@@ -90,6 +91,17 @@ type Model struct {
 	// quitting is set when q is pressed so View() can render a final
 	// frame before the program exits.
 	quitting bool
+
+	// searchEngine is non-nil only while Mode==Search. It is rebuilt on
+	// entering search mode (and lazily on the first applyQuery after) so
+	// the engine always reflects the current HostsFile snapshot. See
+	// search_mode.go for the lifecycle.
+	searchEngine *search.Engine
+
+	// priorSelection captures the SelectedEntryID at the moment '/' was
+	// pressed so Esc can restore it (parity with v1 where leaving search
+	// mode without committing returned the cursor to where it was).
+	priorSelection string
 }
 
 // NewModel constructs a Model rooted at the given hosts file path.
