@@ -96,3 +96,9 @@
 
 ## Next
 1. finishing-a-development-branch: decide merge / PR / discard for Phase 1B branch.
+
+## Phase 4 Validating
+- **Skill:** validating
+- **Feature:** go-migration
+- **Epic:** hosts-cli-go-migration-epic-l54
+- **Phase:** 4 cross-reference
