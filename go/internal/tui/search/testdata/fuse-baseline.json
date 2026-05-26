@@ -1,0 +1,176 @@
+{
+  "api": [
+    {
+      "id": "01HPROD0000000000000000001",
+      "hostname": "api.prod.example.com",
+      "score": 1e-15
+    },
+    {
+      "id": "01HSTAG0000000000000000001",
+      "hostname": "api.staging.example.com",
+      "score": 1e-15
+    },
+    {
+      "id": "01HDEVS0000000000000000002",
+      "hostname": "api.dev.example.com",
+      "score": 3.1622776601683794e-11
+    }
+  ],
+  "prod": [
+    {
+      "id": "01HPROD0000000000000000001",
+      "hostname": "api.prod.example.com",
+      "score": 3.1622776601683796e-17
+    },
+    {
+      "id": "01HPROD0000000000000000002",
+      "hostname": "db.prod.example.com",
+      "score": 3.1622776601683796e-17
+    },
+    {
+      "id": "01HPROD0000000000000000003",
+      "hostname": "cache.prod.example.com",
+      "score": 1e-12
+    }
+  ],
+  "staging": [
+    {
+      "id": "01HSTAG0000000000000000001",
+      "hostname": "api.staging.example.com",
+      "score": 3.1622776601683796e-17
+    },
+    {
+      "id": "01HSTAG0000000000000000002",
+      "hostname": "db.staging.example.com",
+      "score": 1e-12
+    }
+  ],
+  "postgres": [
+    {
+      "id": "01HPROD0000000000000000002",
+      "hostname": "db.prod.example.com",
+      "score": 0.000031622776601683795
+    },
+    {
+      "id": "01HSTAG0000000000000000002",
+      "hostname": "db.staging.example.com",
+      "score": 0.000031622776601683795
+    }
+  ],
+  "dev": [
+    {
+      "id": "01HDEVS0000000000000000001",
+      "hostname": "localhost.dev",
+      "score": 1.5591232609753818e-42
+    },
+    {
+      "id": "01HDEVS0000000000000000002",
+      "hostname": "api.dev.example.com",
+      "score": 4.712160915387242e-19
+    },
+    {
+      "id": "01HDEVS0000000000000000003",
+      "hostname": "minio.dev",
+      "score": 4.712160915387242e-19
+    },
+    {
+      "id": "01HDEVS0000000000000000004",
+      "hostname": "kafka.dev",
+      "score": 4.712160915387242e-19
+    }
+  ],
+  "local": [
+    {
+      "id": "01HPERS0000000000000000001",
+      "hostname": "nas.local",
+      "score": 0.000001
+    },
+    {
+      "id": "01HPERS0000000000000000002",
+      "hostname": "router.local",
+      "score": 0.000001
+    },
+    {
+      "id": "01HPERS0000000000000000003",
+      "hostname": "printer.local",
+      "score": 0.000001
+    },
+    {
+      "id": "01HDEVS0000000000000000001",
+      "hostname": "localhost.dev",
+      "score": 0.000001
+    }
+  ],
+  "192.168": [
+    {
+      "id": "01HPERS0000000000000000001",
+      "hostname": "nas.local",
+      "score": 0.001
+    },
+    {
+      "id": "01HPERS0000000000000000002",
+      "hostname": "router.local",
+      "score": 0.001
+    },
+    {
+      "id": "01HPERS0000000000000000003",
+      "hostname": "printer.local",
+      "score": 0.001
+    }
+  ],
+  "10.0": [
+    {
+      "id": "01HPROD0000000000000000001",
+      "hostname": "api.prod.example.com",
+      "score": 0.001
+    },
+    {
+      "id": "01HPROD0000000000000000002",
+      "hostname": "db.prod.example.com",
+      "score": 0.001
+    },
+    {
+      "id": "01HPROD0000000000000000003",
+      "hostname": "cache.prod.example.com",
+      "score": 0.001
+    },
+    {
+      "id": "01HSTAG0000000000000000001",
+      "hostname": "api.staging.example.com",
+      "score": 0.001
+    },
+    {
+      "id": "01HSTAG0000000000000000002",
+      "hostname": "db.staging.example.com",
+      "score": 0.001
+    }
+  ],
+  "kafka": [
+    {
+      "id": "01HDEVS0000000000000000004",
+      "hostname": "kafka.dev",
+      "score": 0.000001
+    }
+  ],
+  "minio": [
+    {
+      "id": "01HDEVS0000000000000000003",
+      "hostname": "minio.dev",
+      "score": 0.000001
+    }
+  ],
+  "redis": [
+    {
+      "id": "01HPROD0000000000000000003",
+      "hostname": "cache.prod.example.com",
+      "score": 0.000031622776601683795
+    }
+  ],
+  "gatway": [
+    {
+      "id": "01HPERS0000000000000000002",
+      "hostname": "router.local",
+      "score": 0.06804138174397717
+    }
+  ]
+}

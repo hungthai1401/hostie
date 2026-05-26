@@ -1,0 +1,14 @@
+[
+  "api",
+  "prod",
+  "staging",
+  "postgres",
+  "dev",
+  "local",
+  "192.168",
+  "10.0",
+  "kafka",
+  "minio",
+  "redis",
+  "gatway"
+]
