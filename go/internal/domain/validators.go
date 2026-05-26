@@ -104,6 +104,10 @@ func ValidateIPv6(ip string) error {
 	if ip == "" {
 		return fmt.Errorf("IPv6 address cannot be empty")
 	}
+	// Reject IPv4-mapped (::ffff:1.2.3.4) and dotted-quad embeds (::1.2.3.4)
+	if strings.Contains(ip, ".") {
+		return fmt.Errorf("IPv6 address cannot contain dotted-decimal notation")
+	}
 	if strings.Contains(ip, ":::") {
 		return fmt.Errorf("IPv6 address cannot have three or more consecutive colons")
 	}

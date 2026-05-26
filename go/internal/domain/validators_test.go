@@ -155,6 +155,12 @@ func TestValidateIPv6(t *testing.T) {
 		{"group_5_hex", "12345::1", true, "4 hexadecimal"},
 		{"multiple_compression", "2001::db8::1", true, "one double-colon"},
 
+		// --- IPv4-mapped and dotted-quad embeds (must reject per v1 parity) ---
+		{"ipv4_mapped_full", "::ffff:192.168.1.1", true, "dotted-decimal"},
+		{"ipv4_mapped_short", "::ffff:1.2.3.4", true, "dotted-decimal"},
+		{"dotted_quad_embed", "::1.2.3.4", true, "dotted-decimal"},
+		{"dotted_quad_full", "2001:db8::192.168.1.1", true, "dotted-decimal"},
+
 		// --- additional coverage ---
 		{"empty_group_mid", "1:2::3:4:5:6:7:8", true, "groups"},
 		{"too_few_groups_no_compress", "1:2:3:4:5:6:7", true, "exactly 8 groups"},
