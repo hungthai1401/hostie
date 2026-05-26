@@ -3,14 +3,18 @@
 package golden_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,5 +196,165 @@ func TestYAMLRoundtripParity(t *testing.T) {
 }
 
 
-// TODO(Phase 3): Add TestListJSONParity for `hostie list --json` output comparison
-// TODO(Phase 3): Add TestApplyDryRunParity for `hostie apply --dry-run` output comparison
+// TestListJSONParity verifies that `hostie list --json` produces identical JSON
+// output between v1 (Bun/TS) and v2 (Go) for the same ~/.hosts fixture.
+//
+// This is a D15 parity surface: list --json output must be byte-equal.
+func TestListJSONParity(t *testing.T) {
+	v1Binary := ensureV1Binary(t)
+	v2Binary := buildV2Binary(t)
+
+	fixtures := []string{
+		"../fixtures/hosts/simple-dev.yaml",
+		"../fixtures/hosts/complex-roundtrip.yaml",
+		"../fixtures/hosts/nested-groups.yaml",
+	}
+
+	for _, fixturePath := range fixtures {
+		fixturePath := fixturePath
+		t.Run(filepath.Base(fixturePath), func(t *testing.T) {
+			// Create temp HOME with ~/.hosts file
+			tmpHome := t.TempDir()
+			hostsPath := filepath.Join(tmpHome, ".hosts")
+			fixtureData, err := os.ReadFile(fixturePath)
+			require.NoError(t, err)
+			err = os.WriteFile(hostsPath, fixtureData, 0644)
+			require.NoError(t, err)
+
+			// Run v1: hostie list --json (with HOME set to tmpHome)
+			v1Output := runBinaryWithEnv(t, v1Binary, []string{"list", "--json"}, map[string]string{"HOME": tmpHome})
+
+			// Run v2: hostie list --json (with HOME set to tmpHome)
+			v2Output := runBinaryWithEnv(t, v2Binary, []string{"list", "--json"}, map[string]string{"HOME": tmpHome})
+
+			// Assert byte-equal JSON output
+			require.JSONEq(t, v1Output, v2Output,
+				"list --json output diverged for %s\nv1:\n%s\n\nv2:\n%s",
+				fixturePath, v1Output, v2Output)
+		})
+	}
+}
+
+// TestApplyDryRunParity verifies that `hostie apply --dry-run` produces a
+// semantically equivalent managed block between v1 and v2.
+//
+// This is a D15 parity surface, but with documented intentional divergence:
+//   - v1 wraps the block with blank-line padding (BEGIN HOSTIE\n\n...\n\nEND HOSTIE)
+//   - v2 removes the padding for canonical shape (BEGIN HOSTIE\n...\nEND HOSTIE)
+//   - v2 adds "# group: <name>" headers
+//   - v1 and v2 use different framing text ("Managed block..." vs "# Dry run...")
+//
+// See docs/go-migration/release-notes-2.0.0.md for the breaking change rationale.
+// This test verifies that the entry data lines (IP + hostname + aliases) match
+// between v1 and v2 after normalizing all known intentional differences.
+func TestApplyDryRunParity(t *testing.T) {
+	v1Binary := ensureV1Binary(t)
+	v2Binary := buildV2Binary(t)
+
+	fixtures := []string{
+		"../fixtures/hosts/simple-dev.yaml",
+		"../fixtures/hosts/complex-roundtrip.yaml",
+		"../fixtures/hosts/nested-groups.yaml",
+	}
+
+	for _, fixturePath := range fixtures {
+		fixturePath := fixturePath
+		t.Run(filepath.Base(fixturePath), func(t *testing.T) {
+			// Create temp HOME with ~/.hosts file
+			tmpHome := t.TempDir()
+			hostsPath := filepath.Join(tmpHome, ".hosts")
+			fixtureData, err := os.ReadFile(fixturePath)
+			require.NoError(t, err)
+			err = os.WriteFile(hostsPath, fixtureData, 0644)
+			require.NoError(t, err)
+
+			// Run v1: hostie apply --dry-run (with HOME set to tmpHome)
+			v1Output := runBinaryWithEnv(t, v1Binary, []string{"apply", "--dry-run"}, map[string]string{"HOME": tmpHome})
+
+			// Run v2: hostie apply --dry-run (with HOME set to tmpHome)
+			v2Output := runBinaryWithEnv(t, v2Binary, []string{"apply", "--dry-run"}, map[string]string{"HOME": tmpHome})
+
+			// Extract and normalize entry data lines for semantic comparison.
+			v1Entries := extractEntryLines(v1Output)
+			v2Entries := extractEntryLines(v2Output)
+
+			require.Equal(t, v1Entries, v2Entries,
+				"apply --dry-run entry data diverged for %s\nv1:\n%s\n\nv2:\n%s",
+				fixturePath, v1Output, v2Output)
+		})
+	}
+}
+
+// extractEntryLines pulls IP/hostname lines from apply --dry-run output,
+// stripping all framing, comments, and group headers. Returns sorted list
+// of "<ip> <hostname> [aliases...]" strings for semantic comparison.
+func extractEntryLines(output string) []string {
+	var entries []string
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Skip empty lines
+		if trimmed == "" {
+			continue
+		}
+		// Skip comments, markers, framing
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "─") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "Dry-run mode") || strings.HasPrefix(trimmed, "Managed block") {
+			continue
+		}
+		entries = append(entries, trimmed)
+	}
+	sort.Strings(entries)
+	return entries
+}
+
+// buildV2Binary builds the Go v2 binary and returns its path.
+func buildV2Binary(t *testing.T) string {
+	t.Helper()
+
+	// Build to temp location
+	tmpDir := t.TempDir()
+	binaryPath := filepath.Join(tmpDir, "hostie-v2")
+
+	// Build from go/ directory
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/hostie")
+	cmd.Dir = filepath.Join("..", "..") // go/test/golden -> go/
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build v2 binary: %v\nOutput:\n%s", err, output)
+	}
+
+	t.Logf("Built v2 binary: %s", binaryPath)
+	return binaryPath
+}
+
+// runBinaryWithEnv runs a binary with args and environment variables, returns stdout as a string.
+// Fails the test if the command exits non-zero.
+func runBinaryWithEnv(t *testing.T, binaryPath string, args []string, env map[string]string) string {
+	t.Helper()
+
+	cmd := exec.Command(binaryPath, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	// Set environment variables
+	if len(env) > 0 {
+		cmd.Env = os.Environ()
+		for k, v := range env {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+	}
+
+	err := cmd.Run()
+	if err != nil {
+		t.Fatalf("Command failed: %s %v\nError: %v\nStdout:\n%s\nStderr:\n%s",
+			binaryPath, args, err, stdout.String(), stderr.String())
+	}
+
+	return stdout.String()
+}

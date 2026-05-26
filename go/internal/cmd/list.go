@@ -43,12 +43,66 @@ func runList(cmd *cobra.Command, args []string) error {
 }
 
 func outputJSON(hf domain.HostsFile) error {
+	// Flatten all entries from all groups (including nested groups)
+	entries := flattenEntries(hf.Groups)
+
+	// Create output format matching v1: array of entry objects with lowercase keys
+	type JSONEntry struct {
+		ID       string   `json:"id"`
+		IP       string   `json:"ip"`
+		Hostname string   `json:"hostname"`
+		Aliases  []string `json:"aliases"`
+		Enabled  bool     `json:"enabled"`
+		Comment  string   `json:"comment,omitempty"`
+		Group    string   `json:"group"`
+	}
+
+	var output []JSONEntry
+	for _, e := range entries {
+		output = append(output, JSONEntry{
+			ID:       e.Entry.ID,
+			IP:       e.Entry.IP,
+			Hostname: e.Entry.Hostname,
+			Aliases:  e.Entry.Aliases,
+			Enabled:  e.Entry.Enabled,
+			Comment:  e.Entry.Comment,
+			Group:    e.GroupPath,
+		})
+	}
+
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(hf); err != nil {
+	if err := encoder.Encode(output); err != nil {
 		return fmt.Errorf("failed to encode JSON: %w", err)
 	}
 	return nil
+}
+
+// flattenEntries recursively flattens all entries from groups and subgroups.
+type flatEntry struct {
+	Entry     domain.Entry
+	GroupPath string
+}
+
+func flattenEntries(groups []domain.Group) []flatEntry {
+	var result []flatEntry
+	for _, g := range groups {
+		flattenGroup(&g, g.Name, &result)
+	}
+	return result
+}
+
+func flattenGroup(g *domain.Group, path string, result *[]flatEntry) {
+	for _, e := range g.Entries {
+		*result = append(*result, flatEntry{
+			Entry:     e,
+			GroupPath: path,
+		})
+	}
+	for i := range g.Groups {
+		subPath := path + "/" + g.Groups[i].Name
+		flattenGroup(&g.Groups[i], subPath, result)
+	}
 }
 
 func outputHuman(hf domain.HostsFile) error {
