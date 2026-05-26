@@ -1,0 +1,94 @@
+package app
+
+import (
+	"github.com/hungthai1401/hostie/go/internal/domain"
+	"github.com/hungthai1401/hostie/go/internal/tui/components"
+)
+
+// View implements tea.Model. It composes the three rendered panes into
+// a single Layout frame. No business logic lives here — every mutation
+// has already been applied via Update before View is invoked.
+//
+// The composition order matches v1 src/tui/App.tsx:
+//
+//	Layout
+//	  Sidebar  ← GroupTree
+//	  Main     ← EntryList (entries of currently-selected group)
+//	  StatusBar
+//
+// When the program is quitting (q pressed), we render a one-line farewell
+// so the terminal isn't left with the altscreen contents flashing past.
+func (m Model) View() string {
+	if m.quitting {
+		return "bye\n"
+	}
+
+	hf := m.store.HostsFile()
+
+	// Sidebar: full GroupTree rendered from the store snapshot. Collapse
+	// state is not tracked yet (no expand/collapse keybinds in the
+	// navigation-only skeleton); pass nil so every group renders expanded.
+	sidebar := components.RenderGroupTree(
+		hf.Groups,
+		m.store.SelectedGroupPath(),
+		nil,
+	)
+
+	// Main: EntryList shows the entries of the currently selected group.
+	// When no group is selected (boot state on a populated file), fall
+	// back to the entries of the first top-level group so the operator
+	// sees content immediately — matches v1's default-selection behavior.
+	main := m.entryList.View(
+		visibleEntries(hf.Groups, m.store.SelectedGroupPath()),
+		m.store.SelectedEntryID(),
+	)
+
+	// StatusBar: store-driven (dirty marker, mode, query, status message).
+	status := m.statusBar.View(m.store)
+
+	return m.layout.View(sidebar, main, status)
+}
+
+// visibleEntries returns the entries to render in the Main pane given the
+// current selection state.
+//
+//   - selectedPath non-empty → entries of the addressed group (or empty
+//     slice if the path doesn't resolve, which can happen mid-edit).
+//   - selectedPath empty → entries of the first top-level group if any
+//     groups exist; nil otherwise (EntryList renders the empty-state
+//     placeholder).
+//
+// Subgroup entries are not flattened into the parent's listing — that
+// mirrors v1, where the Main pane shows only the directly-selected
+// group's entries.
+func visibleEntries(groups []domain.Group, selectedPath []string) []domain.Entry {
+	if len(selectedPath) > 0 {
+		if g := findGroup(groups, selectedPath); g != nil {
+			return g.Entries
+		}
+		return nil
+	}
+	if len(groups) > 0 {
+		return groups[0].Entries
+	}
+	return nil
+}
+
+// findGroup walks the recursive Group tree to the node at path. Returns
+// nil if any path segment is missing. Empty path returns nil (matches the
+// v1 findGroupByPath in store.ts).
+func findGroup(groups []domain.Group, path []string) *domain.Group {
+	if len(path) == 0 {
+		return nil
+	}
+	for i := range groups {
+		if groups[i].Name != path[0] {
+			continue
+		}
+		if len(path) == 1 {
+			return &groups[i]
+		}
+		return findGroup(groups[i].Groups, path[1:])
+	}
+	return nil
+}
