@@ -16,4 +16,5 @@ dist/
 /hostie
 /dist/
 test/golden/.cache/
+src/test/golden/.cache/
 

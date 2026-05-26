@@ -58,17 +58,17 @@ jobs:
       - name: Cache v1 binaries
         uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
         with:
-          path: test/golden/.cache
+          path: src/test/golden/.cache
           key: golden-${{ runner.os }}-${{ hashFiles('docs/go-migration/golden-pin.md') }}
 
       - name: Run golden harness
-        run: go test -tags golden ./test/golden -v
+        run: go test -tags golden ./src/test/golden -v
 
       - name: Upload divergence artifacts on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: golden-divergence-${{ matrix.os }}
-          path: test/golden/.cache
+          path: src/test/golden/.cache
           if-no-files-found: warn
           retention-days: 7

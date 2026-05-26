@@ -402,9 +402,9 @@ src/
     core/          # YAML I/O, /etc/hosts rendering, marker block, file-io
     domain/        # types, validators, ULID generation
     tui/           # bubbletea TUI (app, components, modal host)
-test/
-  fixtures/        # YAML fixture corpus
-  golden/          # cross-version parity harness
+  test/
+    fixtures/      # YAML fixture corpus
+    golden/        # cross-version parity harness
 ```
 
 Issue tracking and dependency-aware task graph live in `.beads/`; agent operating docs in `AGENTS.md`.

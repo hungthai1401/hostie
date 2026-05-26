@@ -11,7 +11,7 @@ import (
 // Unmarshal → Marshal → Unmarshal MUST produce byte-equal second Marshal AND deep-equal HostsFile.
 // This is Pivot Signal #1: any fixture failure escalates to schema diagnostic.
 func TestFixtureRoundTrip(t *testing.T) {
-	fixturesDir := filepath.Join("..", "..", "..", "..", "test", "fixtures", "hosts")
+	fixturesDir := filepath.Join("..", "..", "..", "test", "fixtures", "hosts")
 	entries, err := os.ReadDir(fixturesDir)
 	if err != nil {
 		t.Fatalf("failed to read fixtures directory %s: %v", fixturesDir, err)
