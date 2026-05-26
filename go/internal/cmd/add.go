@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -58,7 +59,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	hostsFile, err := fileio.ReadHostsFile(hostsFilePath)
 	if err != nil {
 		// If file doesn't exist, create a new one
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			hostsFile = domain.HostsFile{
 				Version: 1,
 				Groups:  []domain.Group{},

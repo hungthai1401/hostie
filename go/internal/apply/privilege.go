@@ -14,12 +14,13 @@ import (
 )
 
 const (
-	// ETC_HOSTS_PATH is the standard location of the hosts file
-	ETC_HOSTS_PATH = "/etc/hosts"
-	
 	// APPLY_PRIVILEGED_CMD is the hidden subcommand for privileged apply
 	APPLY_PRIVILEGED_CMD = "__apply-privileged"
 )
+
+// ETC_HOSTS_PATH is the standard location of the hosts file.
+// Declared as var (not const) so tests can override it via test helpers.
+var ETC_HOSTS_PATH = "/etc/hosts"
 
 // CanWriteEtcHosts checks if the current process can write to /etc/hosts directly
 func CanWriteEtcHosts() bool {
