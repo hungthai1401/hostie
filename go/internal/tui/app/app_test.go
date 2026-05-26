@@ -240,18 +240,21 @@ func TestQuit_CtrlCEquivalent(t *testing.T) {
 	require.True(t, isQuit)
 }
 
-// TestUpdate_UnknownKey_IsNoOp verifies non-navigation keys do not mutate
-// state (mutations land in the app-mutations-9fk bead, not here).
+// TestUpdate_UnknownKey_IsNoOp verifies non-handled keys do not mutate
+// state. With app-mutations-9fk landed, Space/d/a/e/g/m are now active;
+// only truly unbound keys (?, x, z, etc.) remain in this no-op set.
+// (The '?' help modal is intentionally still unbound at the root —
+// help-modal wiring lands in a follow-up bead.)
 func TestUpdate_UnknownKey_IsNoOp(t *testing.T) {
 	m := seedModel(t)
 	before := m.Store().SelectedEntryID()
-	for _, k := range []string{"space", "d", "a", "e", "g", "m", "?", "x"} {
+	for _, k := range []string{"?", "x", "z"} {
 		m2, cmd := m.Update(key(k))
-		require.Nil(t, cmd, "unknown key %q must not produce a Cmd in the skeleton", k)
+		require.Nil(t, cmd, "unbound key %q must not produce a Cmd", k)
 		require.Equal(t, before, m2.(Model).Store().SelectedEntryID(),
-			"unknown key %q must not change selection", k)
+			"unbound key %q must not change selection", k)
 		require.Equal(t, m.Focus(), m2.(Model).Focus(),
-			"unknown key %q must not change focus", k)
+			"unbound key %q must not change focus", k)
 	}
 }
 

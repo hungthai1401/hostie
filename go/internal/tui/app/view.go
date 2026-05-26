@@ -48,7 +48,11 @@ func (m Model) View() string {
 	// StatusBar: store-driven (dirty marker, mode, query, status message).
 	status := m.statusBar.View(m.store)
 
-	return m.layout.View(sidebar, main, status)
+	base := m.layout.View(sidebar, main, status)
+	if m.modalHost != nil && m.modalHost.Active() {
+		return OverlayModal(base, m.modalHost.View(), m.width, m.height)
+	}
+	return base
 }
 
 // visibleEntries returns the entries to render in the Main pane given the

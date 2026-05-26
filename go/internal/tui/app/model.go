@@ -102,19 +102,28 @@ type Model struct {
 	// pressed so Esc can restore it (parity with v1 where leaving search
 	// mode without committing returned the cursor to where it was).
 	priorSelection string
+
+	// modalHost owns the active modal (if any). Constructed in NewModel
+	// and bound to the same *store.Store so the host can keep StoreMode in
+	// sync. See app/modal_host.go and
+	// .spikes/go-migration/p4-modal-pattern/FINDINGS.md §5 for the
+	// integration contract.
+	modalHost *ModalHost
 }
 
 // NewModel constructs a Model rooted at the given hosts file path.
 // Pass "~/.hosts" for production; pass an explicit path in tests so
 // fileio's tilde expansion is not relied on.
 func NewModel(hostsPath string) Model {
+	s := store.New()
 	return Model{
-		store:     store.New(),
+		store:     s,
 		layout:    components.NewLayout(0, 0),
 		entryList: components.NewEntryList(0),
 		statusBar: components.NewStatusBar(),
 		focus:     FocusMain,
 		hostsPath: hostsPath,
+		modalHost: NewModalHost(s),
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/hungthai1401/hostie/go/internal/domain"
+	"github.com/hungthai1401/hostie/go/internal/tui/components"
 	"github.com/hungthai1401/hostie/go/internal/tui/store"
 )
 
@@ -20,12 +21,41 @@ import (
 // apply, / search, ? help, dirty-aware q confirm. The intentional
 // no-op-on-unknown-key behavior here is exercised in the test suite.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Modal interception: per the spike (FINDINGS.md §5), when a modal is
+	// active it consumes EVERY message — keys, results, and pass-through
+	// non-key events — before the root key router runs. This is the
+	// deterministic ordering that forecloses the v1 Esc-routing flake.
+	if m.modalHost != nil && m.modalHost.Active() {
+		next, cmd := m.modalHost.Update(msg)
+		m.modalHost = next
+		// Special-case ModalResultMsg so per-id handlers fire in the same
+		// tick that the modal closes.
+		if result, ok := msg.(components.ModalResultMsg); ok {
+			m2, dispatchCmd := m.dispatchModalResult(result)
+			return m2, tea.Batch(cmd, dispatchCmd)
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case hostsLoadedMsg:
 		return m.handleHostsLoaded(msg), nil
 
 	case tea.WindowSizeMsg:
 		return m.handleWindowSize(msg), nil
+
+	case components.ModalResultMsg:
+		// Modal closed itself between the open Cmd firing and the result
+		// landing. Route to the dispatcher anyway so the mutation runs.
+		return m.dispatchModalResult(msg)
+
+	case ApplyTriggerMsg:
+		// Hook for app-applycmd-91r. Until that bead wires
+		// apply.Runner.Apply + StatusBar plumbing here, the message is
+		// consumed silently — the store mutation has already happened and
+		// ~/.hosts has already been written via the store action. See
+		// mutations.go (top-of-file comment) for the contract.
+		return m, nil
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -76,10 +106,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "q", "ctrl+c":
-		// Skeleton-only: no dirty-check confirm. The app-mutations bead
-		// will replace this with an "unsaved changes?" modal flow.
-		m.quitting = true
-		return m, tea.Quit
+		// Dirty-aware quit (port of v1 useKeyboard.ts q branch). See
+		// mutations.go handleQuitKey for the D11/D13 rationale.
+		return m.handleQuitKey()
 
 	case "tab":
 		return m.handleTab(), nil
@@ -93,6 +122,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		// Enter search mode (port of v1 useKeyboard.ts '/' branch).
 		return m.enterSearchMode(), nil
+
+	case " ", "space":
+		// Space → toggle selected entry enabled (v1 'space' branch).
+		return m.handleSpaceToggle()
+
+	case "d":
+		// Delete-with-confirm (v1 'd' branch + ConfirmModal).
+		return m.handleDeleteKey()
+
+	case "a":
+		// Add entry via EntryEditorModal (v1 'a' branch).
+		return m.handleAddKey()
+
+	case "e":
+		// Edit selected entry via EntryEditorModal (v1 'e' branch).
+		return m.handleEditKey()
+
+	case "g":
+		// Create group via GroupCreatorModal (v1 'g' branch).
+		return m.handleGroupKey()
+
+	case "m":
+		// Move entry via MoveToGroupModal (v1 'm' branch).
+		return m.handleMoveKey()
 	}
 	return m, nil
 }
