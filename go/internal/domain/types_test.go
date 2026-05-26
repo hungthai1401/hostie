@@ -27,6 +27,7 @@ func TestTypesRoundTrip(t *testing.T) {
 						Comment:  "primary mover",
 					},
 				},
+				Groups: []Group{},
 			},
 			{
 				Name: "staging",
@@ -39,6 +40,7 @@ func TestTypesRoundTrip(t *testing.T) {
 					Enabled:  false,
 				},
 				},
+				Groups: []Group{},
 			},
 		},
 	}

@@ -57,7 +57,36 @@ func RenderEntry(e domain.Entry) string {
 	return line
 }
 
-// RenderManagedBlock returns the full managed-block string, including the
+// renderGroupRecursive flattens nested groups into a depth-first traversal.
+// Each group with entries emits a "# group: <name>" header followed by its entries.
+// Nested subgroups are rendered recursively after the parent's entries.
+func renderGroupRecursive(b *strings.Builder, g domain.Group) {
+	hasContent := len(g.Entries) > 0
+	for _, sub := range g.Groups {
+		if len(sub.Entries) > 0 || len(sub.Groups) > 0 {
+			hasContent = true
+			break
+		}
+	}
+	if !hasContent {
+		return
+	}
+
+	if len(g.Entries) > 0 {
+		b.WriteString("# group: ")
+		b.WriteString(g.Name)
+		b.WriteByte('\n')
+		for _, e := range g.Entries {
+			b.WriteString(RenderEntry(e))
+			b.WriteByte('\n')
+		}
+	}
+
+	for _, sub := range g.Groups {
+		renderGroupRecursive(b, sub)
+	}
+}
+
 // BEGIN and END marker lines, with a trailing newline after the END marker.
 //
 // Shape (no blank-line padding above BEGIN or below END):
@@ -78,16 +107,7 @@ func RenderManagedBlock(hf *domain.HostsFile) string {
 
 	if hf != nil {
 		for _, g := range hf.Groups {
-			if len(g.Entries) == 0 {
-				continue
-			}
-			b.WriteString("# group: ")
-			b.WriteString(g.Name)
-			b.WriteByte('\n')
-			for _, e := range g.Entries {
-				b.WriteString(RenderEntry(e))
-				b.WriteByte('\n')
-			}
+			renderGroupRecursive(&b, g)
 		}
 	}
 

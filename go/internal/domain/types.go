@@ -31,6 +31,8 @@ type Group struct {
 	Description string `yaml:"description,omitempty"`
 	// Entries are the host entries directly in this group.
 	Entries []Entry `yaml:"entries"`
+	// Groups are nested subgroups (recursive structure for hierarchical organization).
+	Groups []Group `yaml:"groups"`
 }
 
 // HostsFile is the root structure persisted to ~/.hosts.

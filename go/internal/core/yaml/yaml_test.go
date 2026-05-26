@@ -25,6 +25,7 @@ func sampleHostsFile() *domain.HostsFile {
 						Comment:  "primary",
 					},
 				},
+				Groups: []domain.Group{},
 			},
 			{
 				Name:    "ipv6",
@@ -37,6 +38,7 @@ func sampleHostsFile() *domain.HostsFile {
 					Enabled:  false,
 				},
 				},
+				Groups: []domain.Group{},
 			},
 		},
 	}
