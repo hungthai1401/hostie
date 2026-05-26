@@ -594,3 +594,82 @@ func TestRoot_Help(t *testing.T) {
 	require.Contains(t, out, "apply")
 	require.Contains(t, out, "group")
 }
+
+// ============================================================================
+// TUI launch wiring (bead hosts-cli-go-mig-p4-app-wire-i6k)
+// ============================================================================
+
+// withFakeTUIRunner swaps the package-level tuiRunner with a recorder for the
+// duration of a single test. The recorder captures every invocation's
+// hostsPath argument so tests can assert on what the root command passed in.
+func withFakeTUIRunner(t *testing.T) *[]string {
+	t.Helper()
+	var calls []string
+	orig := tuiRunner
+	tuiRunner = func(hostsPath string) error {
+		calls = append(calls, hostsPath)
+		return nil
+	}
+	t.Cleanup(func() { tuiRunner = orig })
+	return &calls
+}
+
+// TestRoot_NoSubcommand_LaunchesTUI verifies that invoking `hostie` with no
+// subcommand drops into the TUI. The fake runner records the hostsPath that
+// was passed in so we also assert that --file flows through to the TUI model.
+func TestRoot_NoSubcommand_LaunchesTUI(t *testing.T) {
+	h := newHarness(t)
+	calls := withFakeTUIRunner(t)
+
+	_, err := h.run() // no subcommand, no args
+	require.NoError(t, err)
+	require.Len(t, *calls, 1, "TUI runner must be invoked exactly once on bare `hostie`")
+	require.Equal(t, h.hostsPath, (*calls)[0], "TUI must receive the --file path")
+}
+
+// TestRoot_Subcommand_DoesNotLaunchTUI verifies that running a subcommand
+// (e.g. `hostie list`) executes the subcommand and does NOT fall through to
+// the TUI runner — the existing CLI behavior must be preserved.
+func TestRoot_Subcommand_DoesNotLaunchTUI(t *testing.T) {
+	h := newHarness(t)
+	h.writeHosts(domain.HostsFile{Version: 1, Groups: []domain.Group{}})
+	calls := withFakeTUIRunner(t)
+
+	out, err := h.runCapture("list")
+	require.NoError(t, err)
+	require.Empty(t, *calls, "TUI runner must NOT be invoked when a subcommand is given")
+	require.Contains(t, out, "No entries found")
+}
+
+// TestRoot_HelpDoesNotLaunchTUI verifies --help short-circuits cobra's RunE
+// dispatch (cobra prints help and returns before RunE fires).
+func TestRoot_HelpDoesNotLaunchTUI(t *testing.T) {
+	h := newHarness(t)
+	calls := withFakeTUIRunner(t)
+
+	_, err := h.run("--help")
+	require.NoError(t, err)
+	require.Empty(t, *calls, "--help must not launch the TUI")
+}
+
+// TestRoot_VersionDoesNotLaunchTUI verifies --version short-circuits RunE.
+func TestRoot_VersionDoesNotLaunchTUI(t *testing.T) {
+	h := newHarness(t)
+	calls := withFakeTUIRunner(t)
+
+	_, err := h.run("--version")
+	require.NoError(t, err)
+	require.Empty(t, *calls, "--version must not launch the TUI")
+}
+
+// TestRoot_UnknownArg_DoesNotLaunchTUI verifies that an unrecognized
+// positional argument surfaces a clean error instead of being swallowed by
+// the TUI launcher (Args: cobra.NoArgs at the root enforces this).
+func TestRoot_UnknownArg_DoesNotLaunchTUI(t *testing.T) {
+	h := newHarness(t)
+	calls := withFakeTUIRunner(t)
+
+	_, err := h.run("not-a-subcommand")
+	require.Error(t, err)
+	require.Empty(t, *calls, "unknown positional arg must not silently launch the TUI")
+}
