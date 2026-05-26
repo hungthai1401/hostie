@@ -102,3 +102,10 @@
 - **Feature:** go-migration
 - **Epic:** hosts-cli-go-migration-epic-l54
 - **Phase:** 4 cross-reference
+
+## Workers (Phase 4 Wave 1)
+| Name | Status | Current Bead | Reserved Files |
+|------|--------|--------------|----------------|
+| AmberLynx | active | hosts-cli-go-mig-p4-store-state-2c7 | go/internal/tui/store/** |
+| TealOtter | active | hosts-cli-go-mig-p4-comp-layout-3k0 | go/internal/tui/components/layout* |
+| SaffronKite | active | hosts-cli-go-mig-p4-search-spike-khb | .spikes/go-migration/search-spike-khb/** |
