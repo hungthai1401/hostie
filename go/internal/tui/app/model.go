@@ -31,6 +31,7 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/hungthai1401/hostie/go/internal/apply"
 	"github.com/hungthai1401/hostie/go/internal/core/fileio"
 	"github.com/hungthai1401/hostie/go/internal/domain"
 	"github.com/hungthai1401/hostie/go/internal/tui/components"
@@ -109,6 +110,14 @@ type Model struct {
 	// .spikes/go-migration/p4-modal-pattern/FINDINGS.md §5 for the
 	// integration contract.
 	modalHost *ModalHost
+
+	// applyRunner runs the apply pipeline (~/.hosts write → /etc/hosts
+	// render+write) on every successful mutation per design.md D11. It is
+	// constructed in NewModel against hostsPath with dryRun=false (D14: no
+	// dry-run path in the TUI). Held as an applyRunner interface so tests
+	// can inject a fake that records invocations and synthesizes
+	// success/failure outcomes without touching /etc/hosts.
+	applyRunner applyRunner
 }
 
 // NewModel constructs a Model rooted at the given hosts file path.
@@ -117,14 +126,23 @@ type Model struct {
 func NewModel(hostsPath string) Model {
 	s := store.New()
 	return Model{
-		store:     s,
-		layout:    components.NewLayout(0, 0),
-		entryList: components.NewEntryList(0),
-		statusBar: components.NewStatusBar(),
-		focus:     FocusMain,
-		hostsPath: hostsPath,
-		modalHost: NewModalHost(s),
+		store:        s,
+		layout:       components.NewLayout(0, 0),
+		entryList:    components.NewEntryList(0),
+		statusBar:    components.NewStatusBar(),
+		focus:        FocusMain,
+		hostsPath:    hostsPath,
+		modalHost:    NewModalHost(s),
+		applyRunner:  apply.NewRunner(hostsPath, false),
 	}
+}
+
+// WithApplyRunner returns a copy of the Model with the supplied apply runner
+// installed. Used by tests to inject a fake runner; production code uses the
+// runner constructed by NewModel.
+func (m Model) WithApplyRunner(r applyRunner) Model {
+	m.applyRunner = r
+	return m
 }
 
 // Store returns the underlying *store.Store. Exported for tests and for

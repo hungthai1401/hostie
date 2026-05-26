@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/require"
 
+	"github.com/hungthai1401/hostie/go/internal/apply"
 	"github.com/hungthai1401/hostie/go/internal/domain"
 	"github.com/hungthai1401/hostie/go/internal/tui/components"
 )
@@ -306,16 +307,26 @@ func TestMutations_Quit_Clean_QuitsImmediately(t *testing.T) {
 	require.True(t, ok)
 }
 
-// TestMutations_ApplyTriggerMsg_IsHandled confirms the message is consumed
-// silently by the root Update — applycmd-91r will replace this branch with
-// the real apply pipeline. Today the contract is: no panic, no spurious
-// state change, no Cmd.
-func TestMutations_ApplyTriggerMsg_IsHandled(t *testing.T) {
+// TestMutations_ApplyTriggerMsg_TriggersApplyCmd confirms ApplyTriggerMsg is
+// routed to applyCmd against the current store snapshot. The runner used is
+// the fake injected via WithApplyRunner; we drain the resulting Cmd and
+// assert it produces an ApplyResultMsg.
+func TestMutations_ApplyTriggerMsg_TriggersApplyCmd(t *testing.T) {
 	m := seedAndSelect(t, "e1")
-	before := m.Store().SelectedEntryID()
+	fake := &fakeApplyRunner{result: &apply.ApplyResult{Changed: true, Message: "ok"}}
+	m = m.WithApplyRunner(fake)
+
 	m2, cmd := m.Update(ApplyTriggerMsg{})
-	require.Nil(t, cmd, "ApplyTriggerMsg in this bead must be a no-op (applycmd-91r wires the apply Cmd)")
-	require.Equal(t, before, m2.(Model).Store().SelectedEntryID())
+	require.NotNil(t, cmd, "ApplyTriggerMsg must dispatch the apply Cmd")
+	require.Equal(t, m.Store().SelectedEntryID(), m2.(Model).Store().SelectedEntryID(),
+		"ApplyTriggerMsg must not mutate selection")
+
+	msg := cmd()
+	result, ok := msg.(ApplyResultMsg)
+	require.True(t, ok, "expected ApplyResultMsg, got %T", msg)
+	require.NoError(t, result.Err)
+	require.True(t, result.Changed)
+	require.Equal(t, 1, fake.calls, "runner must be invoked exactly once")
 }
 
 // TestMutations_ModalActive_InterceptsKeys verifies the spike contract: when

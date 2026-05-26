@@ -50,12 +50,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.dispatchModalResult(msg)
 
 	case ApplyTriggerMsg:
-		// Hook for app-applycmd-91r. Until that bead wires
-		// apply.Runner.Apply + StatusBar plumbing here, the message is
-		// consumed silently — the store mutation has already happened and
-		// ~/.hosts has already been written via the store action. See
-		// mutations.go (top-of-file comment) for the contract.
-		return m, nil
+		// Auto-apply on mutation (D11). The store mutation has already happened
+		// upstream; applyCmd writes ~/.hosts then renders the managed block into
+		// /etc/hosts via apply.Runner.Apply on a goroutine. The result lands
+		// back here as an ApplyResultMsg.
+		hf := m.store.HostsFile()
+		if hf == nil {
+			return m, nil
+		}
+		return m, applyCmd(m.applyRunner, *hf)
+
+	case ApplyResultMsg:
+		return m.handleApplyResult(msg), nil
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -146,6 +152,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "m":
 		// Move entry via MoveToGroupModal (v1 'm' branch).
 		return m.handleMoveKey()
+
+	case "ctrl+s":
+		// Explicit re-apply. Not a v1 keybind — added per D13/D11 so that
+		// after an auto-apply failure the operator can retry without
+		// performing another mutation. Re-runs the apply pipeline against
+		// the current store snapshot.
+		return m.handleReapplyKey()
 	}
 	return m, nil
 }
