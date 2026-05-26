@@ -3,36 +3,81 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"syscall"
 
 	"github.com/hungthai1401/hostie/go/internal/apply"
 	"github.com/hungthai1401/hostie/go/internal/core/etchosts"
 	"github.com/spf13/cobra"
 )
 
-// applyPrivilegedCmd is a hidden subcommand used internally for privileged apply
-// This command is invoked by sudo when privilege escalation is needed
+// applyPrivilegedCmd is a hidden subcommand used internally for privileged
+// /etc/hosts write. Invoked by sudo from both the CLI (apply.ReexecWithSudo —
+// indirect, via re-exec of the original argv) and the TUI (apply.SudoApplyCmd
+// via tea.ExecProcess).
+//
+// Contract (per design.md D12 + approach.md §8 threat model):
+//
+//   - --payload-path=<file>  : absolute path to a 0600 tempfile under $TMPDIR
+//                              containing the rendered managed-block bytes.
+//   - --owner-uid=<uid>      : the real (invoking) user's uid. The tempfile
+//                              must be owned by this uid; if not, the command
+//                              refuses and unlinks nothing (to preserve
+//                              evidence of the mismatch).
+//
+// The receiver re-validates the file via apply.ValidatePayloadFile (regular
+// file, 0600 perms, owned by invoking user) before writing /etc/hosts. The
+// tempfile is unlinked on every exit path via defer.
+var (
+	applyPrivilegedPayloadPath string
+	applyPrivilegedOwnerUID    int
+)
+
 var applyPrivilegedCmd = &cobra.Command{
-	Use:    apply.APPLY_PRIVILEGED_CMD + " <payload-file>",
+	Use:    apply.APPLY_PRIVILEGED_CMD,
 	Short:  "Internal command for privileged /etc/hosts write (do not call directly)",
 	Hidden: true,
-	Args:   cobra.ExactArgs(1),
+	Args:   cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		payloadPath := args[0]
+		payloadPath := applyPrivilegedPayloadPath
+		ownerUID := applyPrivilegedOwnerUID
 
-		// Validate and read payload file
+		if payloadPath == "" {
+			return fmt.Errorf("--payload-path is required")
+		}
+		if ownerUID <= 0 {
+			return fmt.Errorf("--owner-uid must be > 0, got %d", ownerUID)
+		}
+
+		// Confirm the file's on-disk uid matches the asserted owner-uid
+		// BEFORE handing off to ValidatePayloadFile. ValidatePayloadFile
+		// allows either SUDO_UID or the current uid; this extra check
+		// enforces the caller-asserted identity from the wire bead's
+		// --owner-uid contract.
+		info, err := os.Lstat(payloadPath)
+		if err != nil {
+			return fmt.Errorf("payload not accessible: %w", err)
+		}
+		if stat, ok := info.Sys().(*syscall.Stat_t); !ok {
+			return fmt.Errorf("payload stat unavailable")
+		} else if int(stat.Uid) != ownerUID {
+			return fmt.Errorf("payload owner uid mismatch: file=%d asserted=%d",
+				stat.Uid, ownerUID)
+		}
+
 		content, err := apply.ValidatePayloadFile(payloadPath)
 		if err != nil {
 			return fmt.Errorf("payload validation failed: %w", err)
 		}
 
-		// Ensure cleanup happens on all exit paths
+		// Ensure cleanup happens on all exit paths (success and failure
+		// from the etchosts write below). The SIGINT/SIGTERM handler from
+		// WritePayloadToTempfile (caller side) covers the signal path.
 		defer func() {
-			if err := os.Remove(payloadPath); err != nil {
+			if err := os.Remove(payloadPath); err != nil && !os.IsNotExist(err) {
 				fmt.Fprintf(os.Stderr, "Warning: failed to remove payload file: %v\n", err)
 			}
 		}()
 
-		// Write to /etc/hosts atomically
 		if err := etchosts.WriteEtcHosts(apply.ETC_HOSTS_PATH, string(content)); err != nil {
 			return fmt.Errorf("failed to write /etc/hosts: %w", err)
 		}
@@ -41,3 +86,9 @@ var applyPrivilegedCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	applyPrivilegedCmd.Flags().StringVar(&applyPrivilegedPayloadPath,
+		"payload-path", "", "absolute path to the 0600 payload tempfile under $TMPDIR")
+	applyPrivilegedCmd.Flags().IntVar(&applyPrivilegedOwnerUID,
+		"owner-uid", 0, "uid of the invoking user that owns the payload tempfile")
+}

@@ -3,6 +3,7 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/hungthai1401/hostie/go/internal/apply"
 	"github.com/hungthai1401/hostie/go/internal/domain"
 	"github.com/hungthai1401/hostie/go/internal/tui/components"
 	"github.com/hungthai1401/hostie/go/internal/tui/store"
@@ -51,14 +52,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ApplyTriggerMsg:
 		// Auto-apply on mutation (D11). The store mutation has already happened
-		// upstream; applyCmd writes ~/.hosts then renders the managed block into
-		// /etc/hosts via apply.Runner.Apply on a goroutine. The result lands
-		// back here as an ApplyResultMsg.
+		// upstream; applyCmdDispatch chooses between the direct apply path
+		// (apply.Runner.Apply on a goroutine) and the sudo handoff path
+		// (tea.ExecProcess → __apply-privileged) based on whether the current
+		// process can write /etc/hosts directly. The result lands back here as
+		// an ApplyResultMsg (direct path) or sudoPendingMsg → SudoFinishedMsg
+		// → ApplyResultMsg (sudo path).
 		hf := m.store.HostsFile()
 		if hf == nil {
 			return m, nil
 		}
-		return m, applyCmd(m.applyRunner, *hf)
+		return m, applyCmdDispatch(m.applyRunner, *hf, m.hostsPath)
+
+	case sudoPendingMsg:
+		return m.handleSudoPending(msg)
+
+	case apply.SudoFinishedMsg:
+		return m.handleSudoFinished(msg)
 
 	case ApplyResultMsg:
 		return m.handleApplyResult(msg), nil

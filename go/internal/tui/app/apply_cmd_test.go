@@ -190,6 +190,7 @@ func TestApplyResult_Failure_SetsRedStatus_PreservesDirty(t *testing.T) {
 // mutation first. This is the documented D13 recovery path: after an
 // auto-apply failure, the operator can retry without forcing a dummy edit.
 func TestCtrlS_Reapply_DispatchesApply(t *testing.T) {
+	defer withCanWriteEtcHosts(true)()
 	m := seedModel(t)
 	fake := &fakeApplyRunner{result: &apply.ApplyResult{Changed: true, Message: "ok"}}
 	m = m.WithApplyRunner(fake)
@@ -211,6 +212,7 @@ func TestCtrlS_Reapply_DispatchesApply(t *testing.T) {
 // invoked with the empty file — apply.Runner handles the empty render
 // correctly (returns "no changes").
 func TestCtrlS_Reapply_EmptyStore_StillDispatches(t *testing.T) {
+	defer withCanWriteEtcHosts(true)()
 	m := NewModel("/dev/null")
 	fake := &fakeApplyRunner{result: &apply.ApplyResult{Changed: false}}
 	m = m.WithApplyRunner(fake)
@@ -231,6 +233,7 @@ func TestCtrlS_Reapply_EmptyStore_StillDispatches(t *testing.T) {
 // resulting ApplyResultMsg lands back in Update and the StatusBar reflects
 // success.
 func TestMutationToApplyChain_Success(t *testing.T) {
+	defer withCanWriteEtcHosts(true)()
 	m := seedAndSelect(t, "e1")
 	fake := &fakeApplyRunner{result: &apply.ApplyResult{Changed: true, Message: "ok"}}
 	m = m.WithApplyRunner(fake)
@@ -273,6 +276,7 @@ func TestMutationToApplyChain_Success(t *testing.T) {
 // We verify the store-side invariants directly: mutation visible in store,
 // dirty flag preserved, status banner red with "YAML kept" suffix.
 func TestMutationToApplyChain_FailureKeepsYAML(t *testing.T) {
+	defer withCanWriteEtcHosts(true)()
 	m := seedAndSelect(t, "e1")
 	failure := errors.New("etc/hosts permission denied")
 	fake := &fakeApplyRunner{err: failure}

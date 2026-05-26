@@ -170,5 +170,5 @@ func (m Model) handleReapplyKey() (Model, tea.Cmd) {
 	if hf == nil {
 		return m, nil
 	}
-	return m, applyCmd(m.applyRunner, *hf)
+	return m, applyCmdDispatch(m.applyRunner, *hf, m.hostsPath)
 }

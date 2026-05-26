@@ -118,6 +118,13 @@ type Model struct {
 	// can inject a fake that records invocations and synthesizes
 	// success/failure outcomes without touching /etc/hosts.
 	applyRunner applyRunner
+
+	// pendingSudoCleanup holds the tempfile-cleanup closure returned by
+	// apply.WritePayloadToTempfile while a sudo handoff is in flight. It is
+	// populated when sudoPendingMsg arrives (just before tea.ExecProcess
+	// runs) and invoked when apply.SudoFinishedMsg arrives (success or
+	// failure). See sudo_handoff.go for the lifecycle.
+	pendingSudoCleanup func()
 }
 
 // NewModel constructs a Model rooted at the given hosts file path.

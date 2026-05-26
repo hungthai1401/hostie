@@ -312,6 +312,7 @@ func TestMutations_Quit_Clean_QuitsImmediately(t *testing.T) {
 // the fake injected via WithApplyRunner; we drain the resulting Cmd and
 // assert it produces an ApplyResultMsg.
 func TestMutations_ApplyTriggerMsg_TriggersApplyCmd(t *testing.T) {
+	defer withCanWriteEtcHosts(true)()
 	m := seedAndSelect(t, "e1")
 	fake := &fakeApplyRunner{result: &apply.ApplyResult{Changed: true, Message: "ok"}}
 	m = m.WithApplyRunner(fake)
