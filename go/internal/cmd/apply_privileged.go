@@ -12,7 +12,7 @@ import (
 
 // applyPrivilegedCmd is a hidden subcommand used internally for privileged
 // /etc/hosts write. Invoked by sudo from both the CLI (apply.ReexecWithSudo —
-// indirect, via re-exec of the original argv) and the TUI (apply.SudoApplyCmd
+// indirect, via re-exec of the original argv) and the TUI (app.SudoApplyCmd
 // via tea.ExecProcess).
 //
 // Contract (per design.md D12 + approach.md §8 threat model):

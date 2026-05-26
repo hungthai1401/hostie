@@ -1,6 +1,8 @@
-// sudo_cmd.go — TUI-safe sudo handoff helper for the privileged /etc/hosts write.
+// sudo_cmd.go — pure-stdlib sudo handoff helpers for the privileged
+// /etc/hosts write.
 //
 // Bead: hosts-cli-go-mig-p4-sudo-wire-jpr
+// Review: hosts-cli-review-p1-apply-bubbletea-dep-p40
 //
 // Why this exists separate from privilege.go:
 //
@@ -10,20 +12,23 @@
 //     mid-render, leaving the terminal in altscreen + raw mode.
 //   - The TUI sudo branch must instead release the TTY (so the sudo prompt is
 //     visible in the user's normal scrollback), run the child, then re-acquire
-//     the TTY. That lifecycle is exactly what tea.ExecProcess provides.
+//     the TTY. That lifecycle is provided by tea.ExecProcess, which lives in
+//     the TUI layer (go/internal/tui/app/sudo_exec.go) — apply/ stays free of
+//     any bubbletea dependency so the CLI does not transitively link the TUI
+//     runtime (review P1).
 //
-// This file therefore exposes:
+// This file therefore exposes only pure-stdlib helpers:
 //
 //   - BuildSudoCmd: pure constructor for the *exec.Cmd that will be handed to
-//     tea.ExecProcess. Validates inputs so a malformed exe path or a payload
-//     tempfile outside $TMPDIR is rejected before sudo runs (defence in depth
-//     for the threat model in approach.md §8 "__apply-privileged threat model").
-//   - SudoFinishedMsg: the tea.Msg the callback delivers back to the Update
-//     loop after the child exits (success or failure).
-//   - SudoApplyCmd: convenience tea.Cmd factory that builds the command,
-//     invokes tea.ExecProcess, and wires SudoFinishedMsg as the callback
-//     payload. The TUI consumes this directly; tests can use BuildSudoCmd
-//     alone to avoid the bubbletea runtime dependency.
+//     tea.ExecProcess (in the TUI layer). Validates inputs so a malformed exe
+//     path or a payload tempfile outside $TMPDIR is rejected before sudo runs
+//     (defence in depth for the threat model in approach.md §8
+//     "__apply-privileged threat model").
+//   - ResolveSelfExe: absolute, symlink-resolved path to the running binary,
+//     used by both CLI and TUI sudo paths so they agree on what "self" means.
+//
+// The bubbletea-facing wrappers (SudoApplyCmd, SudoFinishedMsg) live in
+// go/internal/tui/app/sudo_exec.go and consume BuildSudoCmd from here.
 //
 // Design references:
 //
@@ -31,7 +36,7 @@
 //     --payload-path=<f>`; payload is a 0600 tempfile under $TMPDIR owned by
 //     the invoking uid.
 //   - design.md D13: tempfile is unlinked on every exit path (success,
-//     failure, signal). The caller of SudoApplyCmd owns the cleanup (see
+//     failure, signal). The caller owns the cleanup (see
 //     apply/privilege.go::WritePayloadToTempfile for the signal handler).
 //   - phase-4-contract.md clause 6: TUI uses tea.ExecProcess for the handoff.
 //   - .spikes/go-migration/sudo-spike-asr/FINDINGS.md: integration sketch.
@@ -45,28 +50,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
-
-// SudoFinishedMsg is delivered to the Bubble Tea Update loop after the sudo
-// child process exits.
-//
-// Field semantics:
-//
-//   - Err == nil          → child exited 0; /etc/hosts has been rewritten.
-//   - Err != nil          → either the child exited non-zero (wrong password,
-//                           validation failure, write failure) or the exec
-//                           itself failed (sudo not on PATH, TTY release
-//                           failed). ExitCode disambiguates.
-//   - ExitCode == 0       → success (matches Err == nil).
-//   - ExitCode > 0        → child exited non-zero with this status.
-//   - ExitCode == -1      → exec never produced an exit status (sudo missing,
-//                           TTY release failed, etc.).
-type SudoFinishedMsg struct {
-	Err      error
-	ExitCode int
-}
 
 // BuildSudoCmd constructs the *exec.Cmd that re-launches the current binary
 // under sudo to perform the privileged /etc/hosts write.
@@ -163,39 +147,4 @@ func ResolveSelfExe() (string, error) {
 		return real, nil
 	}
 	return exePath, nil
-}
-
-// SudoApplyCmd returns a tea.Cmd suitable for return from the TUI Update
-// loop. It builds the sudo command via BuildSudoCmd, invokes tea.ExecProcess
-// (which releases the TTY, runs sudo, then re-acquires the TTY), and
-// dispatches SudoFinishedMsg back to Update on completion.
-//
-// The caller is responsible for:
-//
-//   - writing the payload tempfile (apply.WritePayloadToTempfile) BEFORE
-//     calling this, and
-//   - cleaning up the tempfile when SudoFinishedMsg is received (success or
-//     failure). See app/sudo_handoff.go for the integration.
-//
-// On build failure (bad exePath, payload outside TMPDIR, invalid uid) the
-// returned Cmd yields SudoFinishedMsg{Err: ..., ExitCode: -1} immediately so
-// the caller never gets a nil callback.
-func SudoApplyCmd(exePath, payloadPath string, ownerUID int) tea.Cmd {
-	cmd, err := BuildSudoCmd(exePath, payloadPath, ownerUID)
-	if err != nil {
-		return func() tea.Msg {
-			return SudoFinishedMsg{Err: err, ExitCode: -1}
-		}
-	}
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		code := 0
-		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				code = exitErr.ExitCode()
-			} else {
-				code = -1
-			}
-		}
-		return SudoFinishedMsg{Err: err, ExitCode: code}
-	})
 }

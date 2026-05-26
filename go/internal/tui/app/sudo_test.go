@@ -14,7 +14,7 @@
 //   - SudoFinishedMsg failure → cleanup fires, status banner red with exit code
 //   - End-to-end: ApplyTriggerMsg with CanWrite==false → sudoPendingMsg pipeline
 //
-// All tests stub apply.SudoApplyCmd / apply.WritePayloadToTempfile /
+// All tests stub SudoApplyCmd / apply.WritePayloadToTempfile /
 // apply.ResolveSelfExe / apply.CanWriteEtcHosts so no real /etc/hosts I/O
 // happens and no TTY is touched.
 
@@ -136,7 +136,7 @@ func TestApplyCmdDispatch_CanWriteTrue_TakesDirectPath(t *testing.T) {
 // path bypasses apply.Runner entirely — the privileged subcommand performs
 // the actual /etc/hosts write).
 func TestApplyCmdDispatch_CanWriteFalse_TakesSudoPath(t *testing.T) {
-	obs := stubSudoDeps(t, false, apply.SudoFinishedMsg{})
+	obs := stubSudoDeps(t, false, SudoFinishedMsg{})
 
 	dir := t.TempDir()
 	hostsPath := filepath.Join(dir, "hosts.yaml")
@@ -172,7 +172,7 @@ func TestApplyCmdDispatch_CanWriteFalse_TakesSudoPath(t *testing.T) {
 func TestHandleSudoPending_Success(t *testing.T) {
 	m := seedSudoModel(t)
 	cleanupCalled := 0
-	exeCmd := func() tea.Msg { return apply.SudoFinishedMsg{} }
+	exeCmd := func() tea.Msg { return SudoFinishedMsg{} }
 
 	m2, cmd := m.handleSudoPending(sudoPendingMsg{
 		exeCmd:  exeCmd,
@@ -216,7 +216,7 @@ func TestHandleSudoFinished_Success_CleansAndGreenBanner(t *testing.T) {
 	cleanupCalls := 0
 	m.pendingSudoCleanup = func() { cleanupCalls++ }
 
-	m2, cmd := m.handleSudoFinished(apply.SudoFinishedMsg{ExitCode: 0})
+	m2, cmd := m.handleSudoFinished(SudoFinishedMsg{ExitCode: 0})
 	require.Nil(t, cmd)
 	require.Equal(t, 1, cleanupCalls, "success must run the tempfile cleanup")
 	require.Nil(t, m2.pendingSudoCleanup, "cleanup pointer must be nil'd after firing")
@@ -239,7 +239,7 @@ func TestHandleSudoFinished_Failure_CleansAndRedBanner(t *testing.T) {
 	m.pendingSudoCleanup = func() { cleanupCalls++ }
 
 	wrongPw := errors.New("exit status 1")
-	m2, _ := m.handleSudoFinished(apply.SudoFinishedMsg{Err: wrongPw, ExitCode: 1})
+	m2, _ := m.handleSudoFinished(SudoFinishedMsg{Err: wrongPw, ExitCode: 1})
 	require.Equal(t, 1, cleanupCalls, "failure must STILL run the tempfile cleanup (D13)")
 	require.Nil(t, m2.pendingSudoCleanup)
 
@@ -258,7 +258,7 @@ func TestHandleSudoFinished_Failure_CleansAndRedBanner(t *testing.T) {
 func TestHandleSudoFinished_NoCleanup(t *testing.T) {
 	m := seedSudoModel(t)
 	require.Nil(t, m.pendingSudoCleanup)
-	m2, _ := m.handleSudoFinished(apply.SudoFinishedMsg{ExitCode: 0})
+	m2, _ := m.handleSudoFinished(SudoFinishedMsg{ExitCode: 0})
 	status := m2.Store().StatusMessage()
 	require.NotNil(t, status)
 	require.Equal(t, store.StatusSuccess, status.Level)
@@ -273,7 +273,7 @@ func TestHandleSudoFinished_NoCleanup(t *testing.T) {
 // success banner + dirty cleared. Verifies no fake runner Apply call and
 // that the tempfile cleanup fires exactly once.
 func TestApplyTrigger_SudoPath_EndToEnd(t *testing.T) {
-	obs := stubSudoDeps(t, false, apply.SudoFinishedMsg{ExitCode: 0})
+	obs := stubSudoDeps(t, false, SudoFinishedMsg{ExitCode: 0})
 
 	m := seedSudoModel(t)
 	m.store.MarkDirty()
@@ -296,7 +296,7 @@ func TestApplyTrigger_SudoPath_EndToEnd(t *testing.T) {
 
 	// Step 3: invoke the (stubbed) exec Cmd → SudoFinishedMsg.
 	finishedMsg := execCmd()
-	finished, ok := finishedMsg.(apply.SudoFinishedMsg)
+	finished, ok := finishedMsg.(SudoFinishedMsg)
 	require.True(t, ok, "expected SudoFinishedMsg, got %T", finishedMsg)
 	require.NoError(t, finished.Err)
 
@@ -318,7 +318,7 @@ func TestApplyTrigger_SudoPath_EndToEnd(t *testing.T) {
 // chain but with a non-zero exit; verifies the failure banner and that
 // dirty/YAML invariants from D13 hold.
 func TestApplyTrigger_SudoPath_FailurePreservesDirty(t *testing.T) {
-	obs := stubSudoDeps(t, false, apply.SudoFinishedMsg{
+	obs := stubSudoDeps(t, false, SudoFinishedMsg{
 		Err:      errors.New("exit status 1"),
 		ExitCode: 1,
 	})
@@ -331,7 +331,7 @@ func TestApplyTrigger_SudoPath_FailurePreservesDirty(t *testing.T) {
 	require.NoError(t, pending.err)
 
 	m3, execCmd := m2.(Model).Update(pending)
-	finished := execCmd().(apply.SudoFinishedMsg)
+	finished := execCmd().(SudoFinishedMsg)
 	m4, _ := m3.(Model).Update(finished)
 	mm := m4.(Model)
 

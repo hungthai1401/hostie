@@ -47,9 +47,10 @@ import (
 var canWriteEtcHostsFn = apply.CanWriteEtcHosts
 
 // sudoApplyCmdFn is the indirection point for the tea.Cmd that drives
-// tea.ExecProcess. Production wires apply.SudoApplyCmd; tests override it to
+// tea.ExecProcess. Production wires app.SudoApplyCmd (sudo_exec.go); tests
+// override it to
 // observe the call shape (exe, payload, uid) without releasing the TTY.
-var sudoApplyCmdFn = apply.SudoApplyCmd
+var sudoApplyCmdFn = SudoApplyCmd
 
 // resolveSelfExeFn is the indirection point for os.Executable + EvalSymlinks.
 // Production wires apply.ResolveSelfExe; tests override it to return a stable
@@ -89,7 +90,7 @@ func applyCmdDispatch(runner applyRunner, hostsFile domain.HostsFile, hostsPath 
 // sudoPendingMsg is delivered after sudoApplyDispatch finishes its
 // in-process prep work (~/.hosts write + payload tempfile creation) and
 // before tea.ExecProcess runs. It carries the cleanup closure so Update can
-// stash it on the Model — when apply.SudoFinishedMsg arrives, Update fires
+// stash it on the Model — when SudoFinishedMsg arrives, Update fires
 // the cleanup and emits an ApplyResultMsg.
 //
 // We do NOT chain ExecProcess directly behind the goroutine that does the
@@ -98,7 +99,7 @@ func applyCmdDispatch(runner applyRunner, hostsFile domain.HostsFile, hostsPath 
 // blocking I/O off the UI goroutine while still letting Update see the
 // ExecProcess Cmd before returning.
 type sudoPendingMsg struct {
-	// exeCmd is the tea.Cmd returned by apply.SudoApplyCmd. Update returns
+	// exeCmd is the tea.Cmd returned by SudoApplyCmd. Update returns
 	// it from the sudoPendingMsg branch; tea.ExecProcess runs synchronously
 	// from that return.
 	exeCmd tea.Cmd
@@ -186,11 +187,11 @@ func (m Model) handleSudoPending(msg sudoPendingMsg) (Model, tea.Cmd) {
 	return m, msg.exeCmd
 }
 
-// handleSudoFinished maps apply.SudoFinishedMsg into ApplyResultMsg, after
+// handleSudoFinished maps SudoFinishedMsg into ApplyResultMsg, after
 // running the deferred tempfile cleanup. The Changed flag is true on
 // success: by the time SudoFinishedMsg arrives, the privileged subcommand
 // has already rewritten /etc/hosts (or surfaced an error via non-zero exit).
-func (m Model) handleSudoFinished(msg apply.SudoFinishedMsg) (Model, tea.Cmd) {
+func (m Model) handleSudoFinished(msg SudoFinishedMsg) (Model, tea.Cmd) {
 	if m.pendingSudoCleanup != nil {
 		m.pendingSudoCleanup()
 		m.pendingSudoCleanup = nil

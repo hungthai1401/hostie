@@ -3,7 +3,6 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/hungthai1401/hostie/go/internal/apply"
 	"github.com/hungthai1401/hostie/go/internal/domain"
 	"github.com/hungthai1401/hostie/go/internal/tui/components"
 	"github.com/hungthai1401/hostie/go/internal/tui/store"
@@ -67,7 +66,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sudoPendingMsg:
 		return m.handleSudoPending(msg)
 
-	case apply.SudoFinishedMsg:
+	case SudoFinishedMsg:
 		return m.handleSudoFinished(msg)
 
 	case ApplyResultMsg:
