@@ -163,12 +163,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Move entry via MoveToGroupModal (v1 'm' branch).
 		return m.handleMoveKey()
 
-	case "ctrl+s":
-		// Explicit re-apply. Not a v1 keybind — added per D13/D11 so that
-		// after an auto-apply failure the operator can retry without
-		// performing another mutation. Re-runs the apply pipeline against
-		// the current store snapshot.
+	case "enter", "ctrl+s":
+		// Explicit re-apply. Ctrl+S is the post-D11/D13 retry hook (re-run
+		// the apply pipeline against the current store snapshot after an
+		// auto-apply failure without performing another mutation). Enter
+		// is the v1 keybind for the same action — both share handleReapplyKey.
 		return m.handleReapplyKey()
+
+	case "?":
+		// Open the HelpModal (v1 '?' keybind). HelpModal is close-only —
+		// see mutations.go handleHelpKey and modal_routing.go modalIDHelp.
+		return m.handleHelpKey()
 	}
 	return m, nil
 }

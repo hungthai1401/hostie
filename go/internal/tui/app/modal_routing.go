@@ -41,6 +41,10 @@ func (m Model) dispatchModalResult(result components.ModalResultMsg) (Model, tea
 		return m.handleGroupCreateResult(result)
 	case modalIDMoveToGroup:
 		return m.handleMoveToGroupResult(result)
+	case modalIDHelp:
+		// HelpModal is close-only: the modal has already closed itself,
+		// no mutation to perform. Acknowledge and return.
+		return m, nil
 	}
 	// Unknown modal id — defensive no-op. A future modal that forgets to
 	// add a case here will simply be a silent close; tests on the

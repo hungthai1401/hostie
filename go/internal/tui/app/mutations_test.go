@@ -347,3 +347,37 @@ func TestMutations_ModalActive_InterceptsKeys(t *testing.T) {
 		"navigation keys must not leak past an active modal (v1 flake foreclosed)")
 	require.True(t, mm.modalHost.Active(), "modal must remain active")
 }
+
+// TestMutations_QuestionMark_OpensHelp covers the v1 '?' keybind: in Normal
+// mode '?' opens the HelpModal. Regression guard for review-p1-C — '?' had
+// no root-router branch and TestUpdate_UnknownKey_IsNoOp asserted it as a
+// no-op, locking the bug in.
+func TestMutations_QuestionMark_OpensHelp(t *testing.T) {
+	m := seedModel(t)
+
+	m2, _ := m.Update(key("?"))
+	mm := m2.(Model)
+	require.True(t, mm.modalHost.Active(), "? must open the HelpModal")
+	require.Equal(t, modalIDHelp, mm.modalHost.Current().ID())
+	_, ok := mm.modalHost.Current().(components.HelpModal)
+	require.True(t, ok, "expected HelpModal, got %T", mm.modalHost.Current())
+}
+
+// TestMutations_Enter_Reapplies covers the v1 Enter keybind documented in
+// HelpModal ("Apply changes to /etc/hosts"). Regression guard for
+// review-p1-E — Enter had no root-router branch; only Ctrl+S re-applied.
+func TestMutations_Enter_Reapplies(t *testing.T) {
+	defer withCanWriteEtcHosts(true)()
+	m := seedAndSelect(t, "e1")
+	fake := &fakeApplyRunner{result: &apply.ApplyResult{Changed: true, Message: "ok"}}
+	m = m.WithApplyRunner(fake)
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, cmd, "Enter must dispatch the apply Cmd")
+
+	msg := cmd()
+	result, ok := msg.(ApplyResultMsg)
+	require.True(t, ok, "expected ApplyResultMsg, got %T", msg)
+	require.NoError(t, result.Err)
+	require.Equal(t, 1, fake.calls, "runner must be invoked exactly once")
+}

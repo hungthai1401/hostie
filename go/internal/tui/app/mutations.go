@@ -46,6 +46,7 @@ const (
 	modalIDEntryEdit    = "entry-edit"
 	modalIDGroupCreate  = "group-create"
 	modalIDMoveToGroup  = components.MoveToGroupModalID // canonical, declared in the modal package
+	modalIDHelp         = "help"
 )
 
 // ApplyTriggerMsg is emitted after every successful store mutation to signal
@@ -140,6 +141,15 @@ func (m Model) handleMoveKey() (Model, tea.Cmd) {
 		return m, nil
 	}
 	modal := components.NewMoveToGroupModal(m.store.HostsFile().Groups)
+	cmd := m.modalHost.Open(modal)
+	return m, cmd
+}
+
+// handleHelpKey opens the HelpModal. The modal is close-only ('?' or Esc
+// inside the modal emits a ModalResultMsg with Confirmed=false and no
+// payload); dispatchModalResult treats modalIDHelp as a no-op acknowledgment.
+func (m Model) handleHelpKey() (Model, tea.Cmd) {
+	modal := components.NewHelpModal(modalIDHelp)
 	cmd := m.modalHost.Open(modal)
 	return m, cmd
 }
