@@ -1,0 +1,77 @@
+version: 1
+groups:
+  - name: work
+    entries: []
+    groups:
+      - name: prod
+        groups: []
+        entries:
+          - id: 01HPROD0000000000000000001
+            ip: 10.0.1.10
+            hostname: api.prod.example.com
+            aliases: [api-prod, prod-api]
+            enabled: true
+          - id: 01HPROD0000000000000000002
+            ip: 10.0.1.11
+            hostname: db.prod.example.com
+            aliases: [postgres-prod, pg-prod]
+            enabled: true
+          - id: 01HPROD0000000000000000003
+            ip: 10.0.1.12
+            hostname: cache.prod.example.com
+            aliases: [redis-prod]
+            enabled: true
+      - name: staging
+        groups: []
+        entries:
+          - id: 01HSTAG0000000000000000001
+            ip: 10.0.2.10
+            hostname: api.staging.example.com
+            aliases: [api-staging, staging-api]
+            enabled: true
+          - id: 01HSTAG0000000000000000002
+            ip: 10.0.2.11
+            hostname: db.staging.example.com
+            aliases: [postgres-staging]
+            enabled: true
+  - name: personal
+    groups: []
+    entries:
+      - id: 01HPERS0000000000000000001
+        ip: 192.168.1.10
+        hostname: nas.local
+        aliases: [storage, files]
+        enabled: true
+      - id: 01HPERS0000000000000000002
+        ip: 192.168.1.20
+        hostname: router.local
+        aliases: [gateway, gw]
+        enabled: true
+      - id: 01HPERS0000000000000000003
+        ip: 192.168.1.30
+        hostname: printer.local
+        aliases: [hp-printer]
+        enabled: true
+  - name: dev
+    groups: []
+    entries:
+      - id: 01HDEVS0000000000000000001
+        ip: 127.0.0.1
+        hostname: localhost.dev
+        aliases: [dev, devbox]
+        enabled: true
+      - id: 01HDEVS0000000000000000002
+        ip: 127.0.0.2
+        hostname: api.dev.example.com
+        aliases: [dev-api]
+        enabled: true
+      - id: 01HDEVS0000000000000000003
+        ip: 10.99.0.1
+        hostname: minio.dev
+        aliases: [s3-dev, blob]
+        enabled: true
+      - id: 01HDEVS0000000000000000004
+        ip: 10.99.0.2
+        hostname: kafka.dev
+        aliases: [stream-dev]
+        enabled: true
