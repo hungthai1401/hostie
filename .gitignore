@@ -1,3 +1,20 @@
 # bv (beads viewer) local config and caches
 .bv/
 dist/
+
+# Spike artifacts: keep FINDINGS.md + reproducer source, ignore downloaded binaries
+.spikes/**/*.tar.gz
+.spikes/**/*.sbom.json
+.spikes/**/gum_*/
+.spikes/**/hostie-darwin-*
+.spikes/**/hostie-linux-*
+!.spikes/**/hostie-*.sha256
+
+# Local Go workspace leakage (GOPATH-style caches and stray builds)
+/bin/
+/pkg/
+/hostie
+/dist/
+test/golden/.cache/
+src/test/golden/.cache/
+

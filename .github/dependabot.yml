@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - ci
+      - dependencies
+    commit-message:
+      prefix: ci
+    # All actions are pinned to commit SHAs (see review bead action-pinning-9mi);
+    # Dependabot will open PRs that bump the SHA and update the trailing version
+    # comment so we keep the supply-chain hardened.
+
+  - package-ecosystem: gomod
+    directory: /go
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - go
+    commit-message:
+      prefix: deps
+    ignore:
+      # bubbletea v2 is a breaking change; pivot signal in design.md forbids v2 until
+      # explicitly re-evaluated. Pin to v1 major.
+      - dependency-name: github.com/charmbracelet/bubbletea
+        update-types:
+          - version-update:semver-major

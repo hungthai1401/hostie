@@ -2,85 +2,136 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: bun-darwin-arm64
-            os: macos-latest
-            asset: hostie-darwin-arm64
-          - target: bun-darwin-x64
-            os: macos-latest
-            asset: hostie-darwin-x64
-          - target: bun-linux-x64
-            os: ubuntu-latest
-            asset: hostie-linux-x64
-          - target: bun-linux-arm64
-            os: ubuntu-latest
-            asset: hostie-linux-arm64
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+          - goos: darwin
+            goarch: amd64
+            runner: macos-latest
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5.6.0
         with:
-          bun-version: latest
+          go-version-file: go.mod
+          cache: true
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build ${{ matrix.target }}
-        run: bun run build.ts --target=${{ matrix.target }}
-
-      - name: Rename binary
-        run: mv dist/hostie-${{ matrix.target }} dist/${{ matrix.asset }}
+      - name: Build hostie-${{ matrix.goos }}-${{ matrix.goarch }}
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          # Strip leading "v" so tag "v2.0.0" produces "hostie v2.0.0", not "hostie vv2.0.0".
+          # Pass via env to avoid script injection from attacker-influenced ref names.
+          VERSION="${REF_NAME#v}"
+          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }} ./src/cmd/hostie
 
       - name: Compute checksum
-        run: |
-          cd dist
-          shasum -a 256 ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
+        run: shasum -a 256 dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }} > dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: ${{ matrix.asset }}
+          name: hostie-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
-            dist/${{ matrix.asset }}
-            dist/${{ matrix.asset }}.sha256
+            dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }}
+            dist/hostie-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
           retention-days: 7
 
-  release:
-    name: Create GitHub Release
+  size-check:
+    name: Verify binary size budget
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          path: artifacts
+          pattern: hostie-*
+          merge-multiple: false
+      - name: Check sizes
+        run: |
+          set -e
+          FAIL=0
+          echo "| Platform | Size | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for dir in artifacts/hostie-*; do
+            name=$(basename "$dir")
+            bins=("$dir"/hostie-*)
+            # Filter out the .sha256 sidecar to leave just the binary
+            bin=""
+            for f in "${bins[@]}"; do
+              case "$f" in
+                *.sha256) ;;
+                *) bin="$f" ;;
+              esac
+            done
+            if [ -z "$bin" ]; then
+              echo "::error::no binary found in $dir"; FAIL=1; continue
+            fi
+            size=$(wc -c <"$bin")
+            mb=$(awk "BEGIN {printf \"%.2f\", $size/1024/1024}")
+            if [ "$size" -gt $((18*1024*1024)) ]; then
+              echo "::error::$name = ${mb} MB > 18 MB hard ceiling"
+              echo "| $name | ${mb} MB | over 18 MB (FAIL) |" >> "$GITHUB_STEP_SUMMARY"
+              FAIL=1
+            elif [ "$size" -gt $((10*1024*1024)) ]; then
+              echo "::warning::$name = ${mb} MB > 10 MB aspirational target"
+              echo "| $name | ${mb} MB | over 10 MB (aspirational miss) |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "$name = ${mb} MB OK"
+              echo "| $name | ${mb} MB | under 10 MB |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          exit $FAIL
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, size-check]
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           path: artifacts
 
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name 'hostie-*' \) -exec cp {} release/ \;
+          find artifacts -type f -name 'hostie-*' -exec cp {} release/ \;
           ls -lh release/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}

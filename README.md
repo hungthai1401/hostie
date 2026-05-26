@@ -44,33 +44,24 @@ sudo mv hostie /usr/local/bin/hostie
 Verify the install:
 
 ```bash
-hostie version
+hostie --version
 ```
 
-### Option 2: Install via npm
+### Option 2: Build From Source
 
-```bash
-npm install -g hostie
-# or
-bun add -g hostie
-```
-
-### Option 3: Build From Source
-
-Hostie is built with [Bun](https://bun.sh).
+Hostie is written in [Go](https://go.dev) (1.23+).
 
 ```bash
 git clone https://github.com/<owner>/hosts-cli.git
 cd hosts-cli
-bun install
-bun run build       # produces a compiled single-file binary in ./dist
-./dist/index        # run the built binary
+go build -o hostie ./src/cmd/hostie
+./hostie --version
 ```
 
-To run directly without compiling:
+To install to your `$GOBIN`:
 
 ```bash
-bun run dev         # launches the TUI from source
+go install ./src/cmd/hostie
 ```
 
 ## Quick Start
@@ -105,7 +96,10 @@ Run `hostie` (with no arguments) to open the interactive terminal UI. The TUI ha
 |-----------|----------------|---------------------------------------------------|
 | `j`       | Normal         | Move selection down (entries or groups)           |
 | `k`       | Normal         | Move selection up (entries or groups)             |
-| `Tab`     | Normal         | Switch focus between sidebar and main pane        |
+| `h`       | Main pane      | Focus the sidebar                                 |
+| `l`       | Sidebar        | Focus the main pane                               |
+| `Tab`     | Normal         | Toggle focus between sidebar and main pane        |
+| `Esc`     | Main pane      | Focus the sidebar (also cancels modals/search)    |
 | `Space`   | Normal         | Toggle the selected entry enabled / disabled      |
 | `d`       | Normal         | Delete the selected entry (confirmation modal)    |
 | `a`       | Normal         | Add a new entry to the current group              |
@@ -116,8 +110,9 @@ Run `hostie` (with no arguments) to open the interactive terminal UI. The TUI ha
 | `Enter`   | Modal / Search | Confirm action or commit search                   |
 | `?`       | Any            | Show the help modal with all keybindings          |
 | `q`       | Normal         | Quit the TUI                                      |
-| `Esc`     | Modal / Search | Cancel modal or exit search mode                  |
 | `Ctrl+C`  | Any            | Exit the application                              |
+
+Navigation is vim-only — arrow keys are intentionally not bound.
 
 ### Modals
 
@@ -216,12 +211,12 @@ hostie completion zsh
 hostie completion fish
 ```
 
-### `hostie version`
+### `hostie --version`
 
 Print the installed version.
 
 ```bash
-hostie version
+hostie --version
 # hostie version 0.1.0
 ```
 
@@ -391,21 +386,25 @@ Hostie only manages content within its marker block in `/etc/hosts`. To remove h
 ## Development
 
 ```bash
-bun install
-bun test                 # run the test suite
-bun run typecheck        # tsc --noEmit
-bun run dev              # run TUI from source
-bun run build            # produce compiled binary in ./dist
+go build -o hostie ./src/cmd/hostie    # build the binary
+go test ./src/...                      # run the test suite
+go vet ./src/...                       # static analysis
 ```
 
 The project layout:
 
 ```
 src/
-  cli/         # commander-based CLI parser and subcommand handlers
-  tui/         # Ink + React TUI (store, components, hooks)
-  core/        # YAML I/O, /etc/hosts rendering, file-io
-  domain/      # types, validators, ULID generation
+  cmd/hostie/      # main entry point
+  internal/
+    cmd/           # cobra CLI parser and subcommand handlers
+    apply/         # /etc/hosts apply pipeline (sudo handoff, atomic write)
+    core/          # YAML I/O, /etc/hosts rendering, marker block, file-io
+    domain/        # types, validators, ULID generation
+    tui/           # bubbletea TUI (app, components, modal host)
+  test/
+    fixtures/      # YAML fixture corpus
+    golden/        # cross-version parity harness
 ```
 
 Issue tracking and dependency-aware task graph live in `.beads/`; agent operating docs in `AGENTS.md`.
