@@ -256,6 +256,55 @@ func TestValidateComment(t *testing.T) {
 	}
 }
 
+func TestValidateAliases(t *testing.T) {
+	cases := []struct {
+		name    string
+		aliases []string
+		wantErr bool
+		errSub  string
+	}{
+		// --- valid ---
+		{"empty_slice", []string{}, false, ""},
+		{"nil_slice", nil, false, ""},
+		{"single_valid", []string{"db.local"}, false, ""},
+		{"multiple_valid", []string{"db.local", "database.local", "db"}, false, ""},
+		{"valid_with_hyphen", []string{"my-server.local"}, false, ""},
+		{"valid_subdomain", []string{"api.example.com"}, false, ""},
+
+		// --- invalid: first alias bad ---
+		{"first_empty", []string{"", "valid.com"}, true, "empty"},
+		{"first_leading_hyphen", []string{"-invalid.com", "valid.com"}, true, "start with a letter or digit"},
+		{"first_trailing_hyphen", []string{"invalid-.com", "valid.com"}, true, "end with a letter or digit"},
+		{"first_consecutive_dots", []string{"foo..bar", "valid.com"}, true, "consecutive"},
+
+		// --- invalid: second alias bad ---
+		{"second_empty", []string{"valid.com", ""}, true, "empty"},
+		{"second_leading_dot", []string{"valid.com", ".invalid.com"}, true, "start with a period"},
+		{"second_trailing_dot", []string{"valid.com", "invalid.com."}, true, "end with a period"},
+
+		// --- invalid: special characters ---
+		{"underscore", []string{"my_server.local"}, true, "invalid character"},
+		{"space", []string{"my server.local"}, true, "invalid character"},
+		{"at_sign", []string{"server@local"}, true, "invalid character"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateAliases(tc.aliases)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error for %v, got nil", tc.aliases)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("expected no error for %v, got %v", tc.aliases, err)
+			}
+			if tc.wantErr && tc.errSub != "" && !strings.Contains(err.Error(), tc.errSub) {
+				t.Fatalf("expected error containing %q, got %v", tc.errSub, err)
+			}
+		})
+	}
+}
+
 func TestValidateNoDuplicates(t *testing.T) {
 	cases := []struct {
 		name    string

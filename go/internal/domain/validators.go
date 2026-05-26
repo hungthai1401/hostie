@@ -182,6 +182,17 @@ func ValidateComment(comment string) error {
 	return nil
 }
 
+// ValidateAliases validates each alias in the slice using ValidateHostname.
+// Returns the first validation error encountered, or nil if all aliases are valid.
+func ValidateAliases(aliases []string) error {
+	for _, alias := range aliases {
+		if err := ValidateHostname(alias); err != nil {
+			return fmt.Errorf("invalid alias %q: %w", alias, err)
+		}
+	}
+	return nil
+}
+
 // ValidateNoDuplicates returns the first duplicate hostname/alias collision
 // across enabled entries. Case-insensitive (v1 parity). Disabled entries are
 // ignored entirely.
