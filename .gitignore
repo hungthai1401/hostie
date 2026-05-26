@@ -13,7 +13,7 @@ dist/
 # Local Go workspace leakage (GOPATH-style caches and stray builds)
 /bin/
 /pkg/
-go/hostie
-go/dist/
-go/test/golden/.cache/
+/hostie
+/dist/
+test/golden/.cache/
 
