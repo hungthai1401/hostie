@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/hungthai1401/hostie/go/internal/apply"
 	"github.com/hungthai1401/hostie/go/internal/core/fileio"
 	"github.com/hungthai1401/hostie/go/internal/domain"
 	"github.com/spf13/cobra"
@@ -10,6 +12,7 @@ import (
 
 var (
 	groupDescription string
+	groupAddDryRun   bool
 )
 
 func newGroupCmd() *cobra.Command {
@@ -47,6 +50,8 @@ func newGroupAddCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE:  runGroupAdd,
 	}
+
+	cmd.Flags().BoolVar(&groupAddDryRun, "dry-run", false, "preview changes without writing")
 
 	return cmd
 }
@@ -118,12 +123,46 @@ func runGroupAdd(cmd *cobra.Command, args []string) error {
 		targetGroup.Entries = append(targetGroup.Entries, entry)
 	}
 
-	// Write back to file
+	// Dry-run: show what would be moved
+	if groupAddDryRun {
+		fmt.Printf("[DRY RUN] Would move %s to group: %s\n", hostname, groupName)
+		
+		// Show apply preview
+		result, err := apply.ApplyFromFile(hostsFilePath, true)
+		if err != nil {
+			return fmt.Errorf("failed to preview apply: %w", err)
+		}
+		if result.Changed {
+			fmt.Println("\n[DRY RUN] Would apply to /etc/hosts:")
+			fmt.Println(result.Message)
+		} else {
+			fmt.Println("\n[DRY RUN] No changes to /etc/hosts (already up to date)")
+		}
+		return nil
+	}
+
+	// Write to ~/.hosts
 	if err := fileio.WriteHostsFile(hostsFilePath, hostsFile); err != nil {
 		return fmt.Errorf("failed to write hosts file: %w", err)
 	}
 
 	fmt.Printf("✓ Moved %s to group: %s\n", hostname, groupName)
+
+	// Auto-apply to /etc/hosts (D11)
+	result, err := apply.ApplyFromFile(hostsFilePath, false)
+	if err != nil {
+		// D13: Keep YAML change, print error, exit with appropriate code
+		fmt.Fprintf(os.Stderr, "Warning: Failed to apply to /etc/hosts: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Run 'hostie apply' to retry.\n")
+		return err
+	}
+
+	if result.Changed {
+		fmt.Println("✓ Applied to /etc/hosts")
+	} else {
+		fmt.Println("✓ /etc/hosts already up to date")
+	}
+
 	return nil
 }
 
